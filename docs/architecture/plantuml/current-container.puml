@@ -1,0 +1,47 @@
+@startuml
+title BidMart Current Container Diagram
+left to right direction
+skinparam componentStyle rectangle
+
+actor "User Browser" as UserBrowser <<Client>>
+actor "Admin Browser" as AdminBrowser <<Client>>
+
+package "Frontend Layer" {
+  component "auth-fe\nAuth Frontend" as AuthFE <<Frontend>>
+  component "core-fe\nCore Frontend" as CoreFE <<Frontend>>
+  component "admin-fe\nAdmin Frontend" as AdminFE <<Frontend>>
+}
+
+package "Backend Layer" {
+  component "auth-be\nAuth Backend\nowns auth-db" as AuthBE <<Backend>>
+  component "core-be\nCore Backend\nowns core-db" as CoreBE <<Backend>>
+  component "admin-be\nAdmin Backend\norchestrates through auth/core APIs" as AdminBE <<Backend>>
+}
+
+package "Data Layer" {
+  database "auth-db\nOwned by auth-be\nusers, credentials, sessions,\nverification/reset tokens,\nMFA and security settings" as AuthDB <<Database>>
+  database "core-db\nOwned by core-be\nlistings, auctions, bids,\norders, wallets, notifications,\nmarketplace data" as CoreDB <<Database>>
+}
+
+cloud "Email Provider\nResend in auth source" as Email <<External System>>
+
+UserBrowser --> AuthFE : loads auth/settings UI
+UserBrowser --> CoreFE : loads marketplace UI
+AdminBrowser --> AdminFE : loads admin UI
+
+AuthFE --> AuthBE : REST /auth/*, /settings/*
+CoreFE --> CoreBE : REST marketplace APIs
+AdminFE --> AdminBE : REST admin APIs
+
+AdminBE --> AuthBE : REST internal API\nuser/account data
+AdminBE --> CoreBE : REST internal API\nlisting, auction, order,\nreport, moderation data
+
+AuthBE --> AuthDB : owns and reads/writes auth data
+CoreBE --> CoreDB : owns and reads/writes marketplace data
+AuthBE --> Email : verification, reset,\nMFA email
+
+note bottom of AdminBE
+No direct database access.
+Admin data requests go through auth-be/core-be.
+end note
+@enduml

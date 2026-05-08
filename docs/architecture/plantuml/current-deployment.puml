@@ -1,0 +1,52 @@
+@startuml
+title BidMart Current Deployment Diagram
+skinparam componentStyle rectangle
+
+node "User Device" as UserDevice {
+  artifact "User Browser" as UserBrowser <<Client>>
+}
+
+node "Admin Device" as AdminDevice {
+  artifact "Admin Browser" as AdminBrowser <<Client>>
+}
+
+node "Frontend Hosting\nEC2 or Container Host" as FEHost {
+  artifact "auth-fe container\nNode 20 / react-router-serve" as AuthFE <<Frontend>>
+  artifact "core-fe container" as CoreFE <<Frontend>>
+  artifact "admin-fe container" as AdminFE <<Frontend>>
+}
+
+node "Backend Runtime\nEC2 or Container Host" as BEHost {
+  artifact "auth-be container\nRust Axum\nowns auth-db" as AuthBE <<Backend>>
+  artifact "core-be container\nowns core-db" as CoreBE <<Backend>>
+  artifact "admin-be container\ncalls auth/core APIs" as AdminBE <<Backend>>
+}
+
+node "Database Runtime" as DBHost {
+  database "auth-db\nowned by auth-be" as AuthDB <<Database>>
+  database "core-db\nowned by core-be" as CoreDB <<Database>>
+}
+
+node "GitHub Actions + GHCR" as CICD {
+  artifact "CI checks" as CI
+  artifact "Docker build" as Build
+  artifact "Trivy image scan" as Scan
+  artifact "GHCR image" as Image
+}
+
+cloud "Email Provider\nResend" as Email <<External System>>
+
+UserBrowser --> AuthFE : HTTPS auth/settings UI
+UserBrowser --> CoreFE : HTTPS marketplace UI
+AdminBrowser --> AdminFE : HTTPS admin UI
+AuthFE --> AuthBE : REST HTTPS
+CoreFE --> CoreBE : REST HTTPS
+AdminFE --> AdminBE : REST HTTPS
+AdminBE --> AuthBE : REST internal API
+AdminBE --> CoreBE : REST internal API
+AuthBE --> AuthDB : PostgreSQL auth data
+CoreBE --> CoreDB : PostgreSQL marketplace data
+AuthBE --> Email : HTTPS email API
+CICD --> FEHost : optional deploy via SSH\nwhen secrets configured
+CICD --> BEHost : optional deploy via SSH\nwhen secrets configured
+@enduml

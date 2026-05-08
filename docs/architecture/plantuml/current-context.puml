@@ -1,0 +1,27 @@
+@startuml
+title BidMart Current Context Diagram
+left to right direction
+skinparam componentStyle rectangle
+
+actor "Buyer/User" as Buyer <<User>>
+actor "Seller/User" as Seller <<User>>
+actor "Admin" as Admin <<User>>
+
+component "BidMart Auth/Core Interfaces\nlogin, account settings,\nmarketplace use" as UserInterface <<Frontend>>
+component "BidMart Admin Interface\nadministration and moderation" as AdminInterface <<Frontend>>
+component "BidMart Platform" as Platform <<System>>
+cloud "Email Provider\nverification, password reset, MFA email" as Email <<External System>>
+
+Buyer --> UserInterface : uses BidMart
+Seller --> UserInterface : uses BidMart
+Admin --> AdminInterface : uses admin interface
+UserInterface --> Platform : HTTPS
+AdminInterface --> Platform : HTTPS
+Platform --> Email : sends auth/security email
+
+note bottom of Platform
+Context diagram intentionally hides databases.
+Database ownership is shown only in container
+and deployment diagrams.
+end note
+@enduml
