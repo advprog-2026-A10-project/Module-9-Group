@@ -99,3 +99,46 @@ database.
 - **GitHub Actions + GHCR**: CI/CD, Docker build, image scan, dan image registry.
 - **Email Provider**: Dipanggil oleh `auth-be` untuk kebutuhan auth/security
   email.
+
+---
+
+## 2. Future Architecture - After Risk Storming
+
+Future architecture mempertahankan batas kepemilikan data yang sama, tetapi
+menambahkan komponen yang secara langsung mengurangi risiko ketika trafik
+BidMart meningkat.
+
+Perubahan utama bukan menambah akses database, melainkan memperjelas routing,
+ownership, observability, dan pemrosesan asynchronous.
+
+### Future Context Diagram
+
+![Future Context Diagram](docs/architecture/future-context.png)
+
+Pada future context, pengguna dan admin tetap mengakses BidMart melalui interface
+yang berbeda. Platform boundary menjadi lebih eksplisit karena ada gateway,
+service boundary yang jelas, dan monitoring/logging untuk mendeteksi masalah
+operasional ketika traffic naik.
+
+Email provider tetap menjadi dependency eksternal untuk proses verification,
+password reset, MFA, dan notifikasi yang relevan.
+
+### Future Container Diagram
+
+![Future Container Diagram](docs/architecture/future-container.png)
+
+**Perubahan arsitektur masa depan:**
+
+- **API Gateway / Load Balancer**: Mengatur ingress, routing, rate limiting, dan
+  membantu mitigasi traffic spike.
+- **Auth Service**: Tetap memiliki hanya `auth-db`.
+- **Core Service**: Tetap memiliki hanya `core-db`.
+- **Admin Service**: Tetap tidak memiliki database langsung dan melakukan
+  orchestration melalui API auth/core.
+- **Redis Cache**: Digunakan untuk session/token lookup dan hot auction cache
+  tanpa mengubah kepemilikan database.
+- **Message Queue + Background Worker**: Memindahkan pekerjaan email dan
+  notification dari request path utama agar sistem lebih tahan terhadap latency
+  provider eksternal.
+- **Monitoring / Logging**: Memberi visibility terhadap error rate, latency,
+  throughput, dan bottleneck tiap service.

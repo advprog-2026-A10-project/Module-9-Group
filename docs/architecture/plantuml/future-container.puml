@@ -1,0 +1,82 @@
+@startuml
+title BidMart Future Container Diagram After Risk Storming
+left to right direction
+skinparam componentStyle rectangle
+
+actor "User Browser" as UserBrowser <<Client>>
+actor "Admin Browser" as AdminBrowser <<Client>>
+component "API Gateway / Load Balancer\ncentral ingress, routing, rate limits" as Gateway <<Backend>>
+
+package "Frontend Layer" {
+  component "auth-fe" as AuthFE <<Frontend>>
+  component "core-fe" as CoreFE <<Frontend>>
+  component "admin-fe" as AdminFE <<Frontend>>
+}
+
+package "Backend Layer" {
+  component "auth service\nowns auth-db\nlogin, JWT, MFA,\nsessions, settings" as AuthService <<Backend>>
+  component "core service\nowns core-db\nlistings, auctions,\nbids, orders, wallets" as CoreService <<Backend>>
+  component "admin service\nno database ownership\norchestrates auth/core APIs" as AdminService <<Backend>>
+}
+
+package "Data Layer" {
+  database "auth-db\nOwned only by auth service" as AuthDB <<Database>>
+  database "core-db\nOwned only by core service" as CoreDB <<Database>>
+}
+
+component "Redis cache\nsession lookup and hot auction cache" as Redis <<Cache>>
+queue "Message Queue\nemail and notification jobs" as Queue <<Backend>>
+component "Background Worker\nsends email/notifications" as Worker <<Backend>>
+component "Monitoring / Logging\nmetrics, logs, alerts" as Obs <<External System>>
+cloud "Email Provider" as Email <<External System>>
+
+UserBrowser --> AuthFE : HTTPS auth/settings UI
+UserBrowser --> CoreFE : HTTPS marketplace UI
+AdminBrowser --> AdminFE : HTTPS admin UI
+
+AuthFE --> Gateway : REST auth/settings requests
+CoreFE --> Gateway : REST marketplace requests
+AdminFE --> Gateway : REST admin requests
+
+Gateway --> AuthService : route /auth/*, /settings/*
+Gateway --> CoreService : route marketplace APIs
+Gateway --> AdminService : route admin APIs
+
+AdminService --> AuthService : REST internal API\nuser/account lookups
+AdminService --> CoreService : REST internal API\nlisting, auction, order,\nreport, moderation data
+
+AuthService --> AuthDB : owns auth data
+CoreService --> CoreDB : owns marketplace data
+
+AuthService --> Redis : session/token cache
+CoreService --> Redis : hot auction cache
+
+AuthService --> Queue : verification/reset/MFA jobs
+CoreService --> Queue : marketplace notification jobs
+AdminService --> Queue : moderation notification jobs
+Queue --> Worker : consume jobs
+Worker --> Email : send email
+
+Gateway --> Obs : access metrics
+AuthService --> Obs : service telemetry
+CoreService --> Obs : service telemetry
+AdminService --> Obs : service telemetry
+Worker --> Obs : worker telemetry
+
+note bottom of Queue
+Queue/worker mitigates synchronous email and
+notification failures during traffic spikes.
+end note
+
+note bottom of Redis
+Redis mitigates repeated auth/session reads
+and hot auction reads without changing
+database ownership.
+end note
+
+note bottom of AdminService
+Admin service does not access auth-db or core-db.
+It requests user data from auth service and
+marketplace/moderation data from core service.
+end note
+@enduml
