@@ -1,0 +1,90 @@
+@startuml
+title Bonus Code Diagram - MFA Settings
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 25
+skinparam ranksep 45
+hide empty members
+
+class AuthMfaUseCase {
+  +get_mfa_settings(auth)
+  +setup_totp(auth, command)
+  +verify_totp_setup(auth, command)
+  +setup_email_mfa(auth, command)
+  +verify_email_mfa_setup(auth, command)
+  +disable_mfa(auth, command)
+  -require_current_password(auth, current_password)
+}
+
+package "MFA Commands and DTOs" as DTO {
+  class SetupTotpCommand
+  class VerifyTotpSetupCommand
+  class SetupEmailMfaCommand
+  class "VerifyEmailMfa\nSetupCommand" as VerifyEmailMfaSetupCommand
+  class DisableMfaCommand
+  class MfaSettingsDto
+}
+
+package "MFA Domain" as DOMAIN {
+  class User
+  class TotpSetup
+  class EmailMfaCode
+  enum EmailMfaCodePurpose {
+    Login
+    Setup
+  }
+}
+
+package "MFA Ports" as PORTS {
+  interface UserRepository
+  interface "TotpSetup\nRepository" as TotpSetupRepository
+  interface "EmailMfaCode\nRepository" as EmailMfaCodeRepository
+  interface TotpService
+  interface MfaEmailSender
+  interface PasswordVerifier
+  interface "VerificationToken\nGenerator" as VerificationTokenGenerator
+  interface "VerificationToken\nHasher" as VerificationTokenHasher
+  interface Clock
+}
+
+package "MFA Infrastructure" as INFRA {
+  class PostgresUserRepository
+  class "PostgresTotpSetup\nRepository" as PostgresTotpSetupRepository
+  class "PostgresEmailMfa\nCodeRepository" as PostgresEmailMfaCodeRepository
+  class TotpRsService
+  class "ResendVerification\nEmailSender" as ResendVerificationEmailSender
+  class ScryptPasswordHasher
+  class "RandomVerification\nTokenGenerator" as RandomVerificationTokenGenerator
+  class "Sha256Verification\nTokenHasher" as Sha256VerificationTokenHasher
+  class SystemClock
+}
+
+class "Auth PostgreSQL" as AuthDB <<Database>>
+class "Resend Email Provider" as Resend <<External System>>
+
+DTO -[hidden]down- DOMAIN
+DOMAIN -[hidden]down- PORTS
+PORTS -[hidden]down- INFRA
+
+AuthMfaUseCase --> DTO : accepts commands\nreturns MFA status
+AuthMfaUseCase --> DOMAIN : updates MFA state
+AuthMfaUseCase --> PORTS : depends on ports
+
+EmailMfaCode --> EmailMfaCodePurpose
+
+PostgresUserRepository ..|> UserRepository
+PostgresTotpSetupRepository ..|> TotpSetupRepository
+PostgresEmailMfaCodeRepository ..|> EmailMfaCodeRepository
+TotpRsService ..|> TotpService
+ResendVerificationEmailSender ..|> MfaEmailSender
+ScryptPasswordHasher ..|> PasswordVerifier
+RandomVerificationTokenGenerator ..|> VerificationTokenGenerator
+Sha256VerificationTokenHasher ..|> VerificationTokenHasher
+SystemClock ..|> Clock
+
+PostgresUserRepository --> AuthDB : MFA flags
+PostgresTotpSetupRepository --> AuthDB : TOTP setup tickets
+PostgresEmailMfaCodeRepository --> AuthDB : email MFA codes
+ResendVerificationEmailSender --> Resend : email MFA code
+@enduml

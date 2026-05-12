@@ -1,0 +1,118 @@
+@startuml
+title Code Diagram - Auth Frontend Settings
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+package "Pages" {
+  class ProfilePage
+  class SecurityPage
+  class SessionsPage
+  class NotificationsPage
+  class MfaPage
+}
+
+package "Hooks" {
+  class useGetProfileQuery
+  class useUpdateProfileMutation
+  class useChangePasswordMutation
+  class useGetSessionsQuery
+  class useRevokeSessionMutation
+  class useGetNotificationPreferencesQuery
+  class useUpdateNotificationPreferencesMutation
+  class useGetMfaStatusQuery
+}
+
+package "Use Cases" {
+  class GetProfileUseCase
+  class UpdateProfileUseCase
+  class ChangePasswordUseCase
+  class GetSessionsUseCase
+  class RevokeSessionUseCase
+  class GetNotificationPreferencesUseCase
+  class UpdateNotificationPreferencesUseCase
+  class GetMfaStatusUseCase
+}
+
+package "Domain" {
+  interface ISettingsRepository
+  class UserProfile
+  class Session
+  class NotificationPreferences
+  class MfaStatus
+}
+
+package "Infrastructure" {
+  class SettingsApiRepository {
+    -basePath: string = "/settings"
+    +getProfile()
+    +updateProfile(data)
+    +changePassword(data)
+    +getSessions()
+    +revokeSession(sessionId)
+    +getNotificationPreferences()
+    +updateNotificationPreferences(data)
+    +getMfaStatus()
+  }
+  class SettingsApiMapper
+  class "settings-api/schemas.ts" as ZodSchemas {
+    +getProfileApiSchema
+    +updateProfileApiSchema
+    +getSessionsApiSchema
+    +getNotificationPreferencesApiSchema
+    +getMfaStatusApiSchema
+  }
+  class apiClient {
+    +get(path)
+    +post(path, body)
+    +put(path, body)
+    +delete(path)
+  }
+  class accessTokenStore {
+    +setAccessToken(token)
+    +getAccessToken()
+    +clearAccessToken()
+  }
+}
+
+ProfilePage --> useGetProfileQuery
+ProfilePage --> useUpdateProfileMutation
+SecurityPage --> useChangePasswordMutation
+SecurityPage --> useGetMfaStatusQuery
+SessionsPage --> useGetSessionsQuery
+SessionsPage --> useRevokeSessionMutation
+NotificationsPage --> useGetNotificationPreferencesQuery
+NotificationsPage --> useUpdateNotificationPreferencesMutation
+MfaPage --> useGetMfaStatusQuery
+
+useGetProfileQuery --> GetProfileUseCase
+useUpdateProfileMutation --> UpdateProfileUseCase
+useChangePasswordMutation --> ChangePasswordUseCase
+useGetSessionsQuery --> GetSessionsUseCase
+useRevokeSessionMutation --> RevokeSessionUseCase
+useGetNotificationPreferencesQuery --> GetNotificationPreferencesUseCase
+useUpdateNotificationPreferencesMutation --> UpdateNotificationPreferencesUseCase
+useGetMfaStatusQuery --> GetMfaStatusUseCase
+
+GetProfileUseCase --> ISettingsRepository
+UpdateProfileUseCase --> ISettingsRepository
+ChangePasswordUseCase --> ISettingsRepository
+GetSessionsUseCase --> ISettingsRepository
+RevokeSessionUseCase --> ISettingsRepository
+GetNotificationPreferencesUseCase --> ISettingsRepository
+UpdateNotificationPreferencesUseCase --> ISettingsRepository
+GetMfaStatusUseCase --> ISettingsRepository
+
+SettingsApiRepository ..|> ISettingsRepository
+SettingsApiRepository --> apiClient : REST /settings/*
+SettingsApiRepository --> SettingsApiMapper : map API to domain
+SettingsApiRepository --> ZodSchemas : validate responses
+apiClient --> accessTokenStore : Authorization header
+
+SettingsApiMapper --> UserProfile
+SettingsApiMapper --> Session
+SettingsApiMapper --> NotificationPreferences
+SettingsApiMapper --> MfaStatus
+@enduml
+

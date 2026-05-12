@@ -187,3 +187,60 @@ dan membuat failure lebih mudah dideteksi.
 - Tidak ada panah `core-be -> auth-db`.
 - Tidak ada panah `admin-fe -> auth-be` atau `admin-fe -> core-be`.
 
+---
+
+## 4. Individual Architecture - Gregorius Ega Aditama Sudjali
+
+Individual part: **Auth Settings Security**, covering:
+
+- settings profile
+- password change
+- sessions
+- notification preferences
+- MFA TOTP/email setup and verification
+
+This individual work expands the Auth Frontend and Auth Backend containers from
+the group container diagram. The dependency boundary follows the corrected group
+architecture: Auth Frontend calls Auth Backend, and Auth Backend owns Auth
+PostgreSQL. This individual work does not introduce direct Admin Backend
+database access or cross-service database ownership.
+
+### Individual Component Diagram
+
+![Individual Component Diagram](docs/architecture/individual-component-auth-settings-security.png)
+
+This diagram expands only the `auth-fe -> auth-be -> auth-db` part of the group
+container diagram.
+
+### Code Diagram - Frontend Settings
+
+![Code Diagram - Frontend Settings](docs/architecture/individual-code-frontend-settings.png)
+
+This diagram focuses only on the frontend settings pages, hooks, use cases,
+repository abstraction, API repository, Zod schemas, API client, and access token
+store.
+
+### Code Diagram - Backend Settings
+
+![Code Diagram - Backend Settings](docs/architecture/individual-code-backend-settings.png)
+
+This diagram focuses only on backend settings/security controllers, auth
+extractor, `AuthMfaUseCase`, DTOs, entities, repository traits, PostgreSQL
+repositories, and supporting services.
+
+### Bonus MFA Settings Component Diagram
+
+![Bonus MFA Settings Component Diagram](docs/architecture/bonus-component-mfa-settings.png)
+
+### Bonus MFA Settings Code Diagram
+
+![Bonus MFA Settings Code Diagram](docs/architecture/bonus-code-mfa-settings.png)
+
+### Individual Boundary Validation
+
+- No Core DB is shown in the individual diagrams.
+- No Admin DB is shown in the individual diagrams.
+- No Admin Backend direct database access is shown.
+- Auth Backend repositories persist only to Auth PostgreSQL.
+- Resend is used only for email-related flows, especially MFA email.
+

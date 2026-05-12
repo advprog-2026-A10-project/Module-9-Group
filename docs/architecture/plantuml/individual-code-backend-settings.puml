@@ -1,0 +1,115 @@
+@startuml
+title Code Diagram - Auth Backend Settings
+top to bottom direction
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 25
+skinparam ranksep 45
+hide empty members
+
+package "HTTP Layer" as HTTP {
+  class controllers {
+    +get_profile()
+    +update_profile()
+    +change_password()
+    +get_sessions()
+    +revoke_session()
+    +revoke_all_sessions()
+    +get_notification_preferences()
+    +update_notification_preferences()
+    +get_mfa_settings()
+  }
+  class AuthenticatedUser
+  enum ApiError
+}
+
+package "Application DTOs and Use Case" as APP {
+  class AuthMfaUseCase {
+    +get_profile(auth)
+    +update_profile(auth, command)
+    +change_password(auth, command)
+    +get_sessions(auth)
+    +revoke_session(auth, session_id)
+    +revoke_all_sessions(auth)
+    +get_notification_preferences(auth)
+    +update_notification_preferences(auth, command)
+    +get_mfa_settings(auth)
+  }
+  class "UpdateProfileCommand" as UpdateProfileCommand
+  class "ChangePasswordCommand" as ChangePasswordCommand
+  class "UpdateNotification\nPreferencesCommand" as UpdateNotificationPreferencesCommand
+  class MfaSettingsDto
+  class SessionDto
+  class NotificationPreferencesDto
+  class AuthenticatedUserContext
+}
+
+package "Domain Entities" as DOMAIN {
+  class User
+  class AuthSession
+  class "Notification\nPreferences" as NotificationPreferences
+  class EmailMfaCode
+  class TotpSetup
+  enum AuthError
+}
+
+package "Repository Traits" as PORTS {
+  interface UserRepository
+  interface SessionRepository
+  interface "NotificationPreferences\nRepository" as NotificationPreferencesRepository
+  interface "EmailMfaCode\nRepository" as EmailMfaCodeRepository
+  interface "TotpSetup\nRepository" as TotpSetupRepository
+}
+
+package "Infrastructure Repositories" as REPOS {
+  class PostgresUserRepository
+  class PostgresSessionRepository
+  class "PostgresNotification\nPreferencesRepository" as PostgresNotificationPreferencesRepository
+  class "PostgresEmailMfa\nCodeRepository" as PostgresEmailMfaCodeRepository
+  class "PostgresTotpSetup\nRepository" as PostgresTotpSetupRepository
+}
+
+package "Services" as SERVICES {
+  class ScryptPasswordHasher
+  class TotpRsService
+  class "ResendVerification\nEmailSender" as ResendVerificationEmailSender
+  class SystemClock
+}
+
+class "Auth PostgreSQL" as AuthDB <<Database>>
+class "Resend Email Provider" as Resend <<External System>>
+
+HTTP -[hidden]down- APP
+APP -[hidden]down- DOMAIN
+DOMAIN -[hidden]down- PORTS
+PORTS -[hidden]down- REPOS
+REPOS -[hidden]down- SERVICES
+
+controllers --> AuthenticatedUser : extract JWT/session
+controllers --> AuthMfaUseCase : call settings methods
+controllers --> ApiError : map errors
+AuthenticatedUser --> AuthenticatedUserContext
+
+AuthMfaUseCase --> PORTS : uses repository traits
+AuthMfaUseCase --> SERVICES : uses services
+AuthMfaUseCase --> DOMAIN : reads/updates entities
+AuthMfaUseCase --> UpdateProfileCommand
+AuthMfaUseCase --> ChangePasswordCommand
+AuthMfaUseCase --> UpdateNotificationPreferencesCommand
+AuthMfaUseCase --> MfaSettingsDto
+AuthMfaUseCase --> SessionDto
+AuthMfaUseCase --> NotificationPreferencesDto
+
+PostgresUserRepository ..|> UserRepository
+PostgresSessionRepository ..|> SessionRepository
+PostgresNotificationPreferencesRepository ..|> NotificationPreferencesRepository
+PostgresEmailMfaCodeRepository ..|> EmailMfaCodeRepository
+PostgresTotpSetupRepository ..|> TotpSetupRepository
+
+PostgresUserRepository --> AuthDB : users/profiles/MFA flags
+PostgresSessionRepository --> AuthDB : sessions
+PostgresNotificationPreferencesRepository --> AuthDB : preferences
+PostgresEmailMfaCodeRepository --> AuthDB : email MFA codes
+PostgresTotpSetupRepository --> AuthDB : TOTP setup tickets
+ResendVerificationEmailSender --> Resend : MFA email
+@enduml
