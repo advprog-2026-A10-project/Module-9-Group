@@ -178,6 +178,77 @@ dan membuat failure lebih mudah dideteksi.
 
 ---
 
+## 4. Individual Container Diagram - core-be Bidding (Muhamad Hakim Nizami)
+
+Bagian ini adalah ekspansi individual dari container `core-be` pada group
+container diagram, difokuskan pada fitur **Bidding** (lelang real-time).
+Diagram component menunjukkan bagaimana satu container Rust Axum dipecah
+menjadi controller, use case, repository, dan domain layer. Empat code diagram
+men-zoom ke detail kelas pada masing-masing layer.
+
+### Component Diagram - core-be (Bidding)
+
+![Individual Component Diagram](docs/architecture/individual-component-core-be-bidding.png)
+
+`core-be` ber-interface dengan `core-fe` melalui REST (place bid, list bids)
+dan WebSocket (live bid stream). Internal pipeline place-bid mengikuti flow:
+
+1. `BidController` menerima request dan mengekstrak `AuthUser`.
+2. `PlaceBidUseCase` membuka transaction, mengunci row auction
+   (`SELECT ... FOR UPDATE`), dan memvalidasi bid melalui domain entity.
+3. `WalletGateway` memesan dana via internal API ke `auth-be`.
+4. `BidRepository` menulis row bid baru, `AuctionRepository` meng-update
+   `current_highest`.
+5. `BidBroadcaster` mempublish event ke seluruh subscriber WebSocket.
+
+Kepemilikan data tetap konsisten dengan group container diagram: `core-be`
+satu-satunya yang menyentuh `core-db`, dan akses ke wallet/auth data dilakukan
+melalui API `auth-be`, bukan akses database silang.
+
+### Code Diagram - Bidding Domain Layer
+
+![Code: Bidding Domain](docs/architecture/individual-code-bid-domain.png)
+
+Domain layer berisi entity `Auction` (state machine `Scheduled/Open/Closed/
+Cancelled`), entity `Bid`, value object `BidAmount` dan `BidIncrement` dengan
+constructor yang divalidasi, serta `BidError` sebagai error type seragam.
+Aturan bisnis seperti "harus lebih tinggi dari current highest" dan "harus
+memenuhi minimum increment" dienkapsulasi di `Auction::validate_bid`, bukan
+di controller atau repository.
+
+### Code Diagram - PlaceBidUseCase (Application Layer)
+
+![Code: PlaceBidUseCase](docs/architecture/individual-code-place-bid-use-case.png)
+
+`PlaceBidUseCase` di-inject dengan trait dependency (`AuctionRepository`,
+`BidRepository`, `WalletGateway`, `BidBroadcaster`, `Clock`,
+`TransactionManager`). Use case meng-orkestrasi transaction, validasi domain,
+dan reservation funds. DTO `PlaceBidCommand` adalah input dari controller dan
+`PlaceBidResult` adalah output yang akan dipetakan ke response HTTP.
+
+### Code Diagram - BidController (Infrastructure Layer)
+
+![Code: BidController](docs/architecture/individual-code-bid-controller.png)
+
+`BidController` mendaftarkan tiga route Axum di `/auctions`, mengekstrak
+`AuthUser` melalui custom extractor, dan memetakan `BidError` ke `ApiError`
+dengan status code yang sesuai (409, 410, 402, 403, 404). Layer ini tidak
+mengandung business rule; semua keputusan didelegasikan ke use case dan
+domain.
+
+### Code Diagram - Sqlx Bid and Auction Repositories
+
+![Code: Bid and Auction Repositories](docs/architecture/individual-code-bid-repository.png)
+
+`SqlxBidRepository` dan `SqlxAuctionRepository` mengimplementasi trait domain
+dan memetakan ke tabel `bids` dan `auctions` di `core-db`. `load_for_update`
+mengeluarkan `SELECT ... FOR UPDATE` di dalam transaction agar bid concurrent
+pada auction yang sama di-serialize, menghindari race condition pada
+`current_highest`. Index `(auction_id, amount_cents DESC)` di tabel `bids`
+mendukung listing bid history dengan cepat.
+
+---
+
 ## Validation Notes
 
 - Diagram ini hanya menggunakan dua database: `auth-db` dan `core-db`.

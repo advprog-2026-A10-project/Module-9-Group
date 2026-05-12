@@ -1,0 +1,80 @@
+@startuml
+title BidMart Component Diagram - core-be Bidding (Individual: Muhamad Hakim Nizami)
+left to right direction
+skinparam componentStyle rectangle
+
+actor "core-fe\nCore Frontend" as CoreFE <<Container>>
+
+package "core-be Container\nRust Axum REST API" {
+
+  package "Infrastructure Layer" {
+    component "BidController\nPOST /auctions/{id}/bids\nGET  /auctions/{id}/bids\nGET  /auctions/{id}" as BidController <<Controller>>
+    component "BidWebSocketHandler\nGET /auctions/{id}/stream" as BidWS <<Controller>>
+    component "SqlxAuctionRepository" as AuctionRepo <<Repository>>
+    component "SqlxBidRepository" as BidRepo <<Repository>>
+    component "InternalWalletClient\ncalls auth-be wallet API" as WalletClient <<Adapter>>
+    component "TokioBidBroadcaster\nin-process pub/sub" as Broadcaster <<Adapter>>
+    component "SystemClock" as Clock <<Service>>
+  }
+
+  package "Application Layer" {
+    component "PlaceBidUseCase" as PlaceBidUC <<UseCase>>
+    component "ListBidsUseCase" as ListBidsUC <<UseCase>>
+    component "GetAuctionWithBidsUseCase" as GetAuctionUC <<UseCase>>
+  }
+
+  package "Domain Layer" {
+    component "Bid\nentity" as BidEntity <<Domain>>
+    component "Auction\nentity, state machine" as AuctionEntity <<Domain>>
+    component "BidAmount, BidIncrement\nvalue objects" as BidValue <<Domain>>
+    component "BidError\nNotHighest, AuctionClosed,\nSelfBid, BelowMinIncrement,\nInsufficientFunds" as BidError <<Domain>>
+    interface "AuctionRepository" as AuctionRepoTrait <<Trait>>
+    interface "BidRepository" as BidRepoTrait <<Trait>>
+    interface "WalletGateway" as WalletTrait <<Trait>>
+    interface "BidBroadcaster" as BroadcasterTrait <<Trait>>
+  }
+}
+
+database "core-db\nauctions, bids,\nlistings, orders" as CoreDB <<Database>>
+component "auth-be\nWallet API" as AuthBE <<External Service>>
+
+CoreFE --> BidController : REST place bid /\nlist bids
+CoreFE --> BidWS : WebSocket subscribe\nlive bid stream
+
+BidController --> PlaceBidUC : invokes
+BidController --> ListBidsUC : invokes
+BidController --> GetAuctionUC : invokes
+BidWS --> Broadcaster : subscribe
+
+PlaceBidUC --> AuctionRepoTrait
+PlaceBidUC --> BidRepoTrait
+PlaceBidUC --> WalletTrait
+PlaceBidUC --> BroadcasterTrait
+PlaceBidUC --> Clock
+ListBidsUC --> BidRepoTrait
+GetAuctionUC --> AuctionRepoTrait
+GetAuctionUC --> BidRepoTrait
+
+PlaceBidUC ..> BidEntity : creates
+PlaceBidUC ..> AuctionEntity : loads, validates
+PlaceBidUC ..> BidValue : uses
+PlaceBidUC ..> BidError : returns
+
+AuctionRepo ..|> AuctionRepoTrait
+BidRepo ..|> BidRepoTrait
+WalletClient ..|> WalletTrait
+Broadcaster ..|> BroadcasterTrait
+
+AuctionRepo --> CoreDB : SELECT FOR UPDATE auction\nUPDATE current_highest
+BidRepo --> CoreDB : INSERT bid\nSELECT bids by auction
+WalletClient --> AuthBE : reserve / release funds
+
+note bottom of PlaceBidUC
+Transactional flow:
+1. Lock auction row
+2. Validate state, amount, increment
+3. Reserve buyer funds via wallet
+4. Insert bid, update auction
+5. Broadcast new highest bid
+end note
+@enduml

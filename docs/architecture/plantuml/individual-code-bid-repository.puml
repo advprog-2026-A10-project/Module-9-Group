@@ -1,0 +1,73 @@
+@startuml
+title BidMart Code Diagram - Sqlx Bid and Auction Repositories
+skinparam classAttributeIconSize 0
+
+package "modules::bidding::domain::traits" {
+  interface AuctionRepository {
+    + load_for_update(tx, id: AuctionId): Result<Auction, BidError>
+    + save_current_highest(tx, auction: &Auction): Result<(), BidError>
+  }
+  interface BidRepository {
+    + insert(tx, bid: &Bid): Result<(), BidError>
+    + list_by_auction(auction_id: AuctionId, limit: u32): Result<Vec<Bid>, BidError>
+  }
+}
+
+package "modules::bidding::infrastructure::repositories" {
+  class SqlxAuctionRepository {
+    - pool: PgPool
+    --
+    + new(pool: PgPool): SqlxAuctionRepository
+    + load_for_update(tx, id: AuctionId): Result<Auction, BidError>
+    + save_current_highest(tx, auction: &Auction): Result<(), BidError>
+    - map_row(row: PgRow): Result<Auction, BidError>
+  }
+
+  class SqlxBidRepository {
+    - pool: PgPool
+    --
+    + new(pool: PgPool): SqlxBidRepository
+    + insert(tx, bid: &Bid): Result<(), BidError>
+    + list_by_auction(auction_id: AuctionId, limit: u32): Result<Vec<Bid>, BidError>
+    - map_row(row: PgRow): Result<Bid, BidError>
+  }
+}
+
+package "schema (core-db)" {
+  class "auctions" as AuctionsTable <<table>> {
+    id UUID PK
+    listing_id UUID
+    seller_id UUID
+    starts_at TIMESTAMPTZ
+    ends_at TIMESTAMPTZ
+    starting_price_cents BIGINT
+    min_increment_cents BIGINT
+    state TEXT
+    current_highest_cents BIGINT NULL
+    current_highest_bidder UUID NULL
+    version BIGINT
+  }
+
+  class "bids" as BidsTable <<table>> {
+    id UUID PK
+    auction_id UUID FK -> auctions(id)
+    bidder_id UUID
+    amount_cents BIGINT
+    placed_at TIMESTAMPTZ
+    INDEX (auction_id, amount_cents DESC)
+  }
+}
+
+SqlxAuctionRepository ..|> AuctionRepository
+SqlxBidRepository ..|> BidRepository
+SqlxAuctionRepository --> AuctionsTable : SELECT FOR UPDATE\nUPDATE current_highest WHERE version = ?
+SqlxBidRepository --> BidsTable : INSERT bid\nSELECT bids by auction_id ORDER BY amount_cents DESC
+
+note bottom of SqlxAuctionRepository
+load_for_update issues
+SELECT ... FOR UPDATE
+inside the active tx to
+serialize concurrent bids
+on the same auction.
+end note
+@enduml

@@ -1,0 +1,76 @@
+@startuml
+title BidMart Code Diagram - BidController Infrastructure Layer
+skinparam classAttributeIconSize 0
+
+package "modules::bidding::infrastructure::dto" {
+  class PlaceBidRequest {
+    + amount_cents: i64
+  }
+
+  class BidResponse {
+    + bid_id: String
+    + auction_id: String
+    + amount_cents: i64
+    + bidder_id: String
+    + placed_at: String
+  }
+
+  class AuctionWithBidsResponse {
+    + auction_id: String
+    + state: String
+    + current_highest_amount_cents: Option<i64>
+    + ends_at: String
+    + bids: Vec<BidResponse>
+  }
+
+  class ApiError {
+    + status: StatusCode
+    + code: String
+    + message: String
+    --
+    + from_bid_error(err: BidError): ApiError
+  }
+}
+
+package "modules::bidding::infrastructure::controllers" {
+  class BidController {
+    - place_bid: Arc<PlaceBidUseCase>
+    - list_bids: Arc<ListBidsUseCase>
+    - get_auction: Arc<GetAuctionWithBidsUseCase>
+    --
+    + routes(): Router<AppState>
+    + place_bid_handler(State, Path<AuctionId>, AuthUser, Json<PlaceBidRequest>): Result<Json<BidResponse>, ApiError>
+    + list_bids_handler(State, Path<AuctionId>, Query<ListBidsQuery>): Result<Json<Vec<BidResponse>>, ApiError>
+    + get_auction_handler(State, Path<AuctionId>): Result<Json<AuctionWithBidsResponse>, ApiError>
+  }
+
+  class AuthUser <<extractor>> {
+    + user_id: UserId
+    + roles: Vec<Role>
+    --
+    + from_request_parts(parts, state): Result<AuthUser, ApiError>
+  }
+}
+
+BidController ..> PlaceBidRequest
+BidController ..> BidResponse
+BidController ..> AuctionWithBidsResponse
+BidController ..> ApiError
+BidController --> AuthUser : extracts
+BidController --> PlaceBidUseCase
+BidController --> ListBidsUseCase
+BidController --> GetAuctionWithBidsUseCase
+
+note right of BidController
+Routes registered on /auctions:
+  POST  /auctions/{id}/bids
+  GET   /auctions/{id}/bids
+  GET   /auctions/{id}
+ApiError maps domain errors to:
+  409 NotHighest, BelowMinIncrement
+  410 AuctionClosed
+  402 InsufficientFunds
+  403 SelfBidNotAllowed
+  404 AuctionNotFound
+end note
+@enduml

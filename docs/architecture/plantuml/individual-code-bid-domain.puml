@@ -1,0 +1,77 @@
+@startuml
+title BidMart Code Diagram - Bidding Domain Layer
+skinparam classAttributeIconSize 0
+
+package "modules::bidding::domain" {
+
+  class Auction {
+    + id: AuctionId
+    + listing_id: ListingId
+    + seller_id: UserId
+    + starts_at: DateTime<Utc>
+    + ends_at: DateTime<Utc>
+    + starting_price: BidAmount
+    + min_increment: BidIncrement
+    + current_highest: Option<BidAmount>
+    + current_highest_bidder: Option<UserId>
+    + state: AuctionState
+    --
+    + is_open(now: DateTime<Utc>): bool
+    + validate_bid(amount: BidAmount, bidder: UserId, now: DateTime<Utc>): Result<(), BidError>
+    + apply_new_highest(amount: BidAmount, bidder: UserId): Auction
+  }
+
+  enum AuctionState {
+    Scheduled
+    Open
+    Closed
+    Cancelled
+  }
+
+  class Bid {
+    + id: BidId
+    + auction_id: AuctionId
+    + bidder_id: UserId
+    + amount: BidAmount
+    + placed_at: DateTime<Utc>
+  }
+
+  class BidAmount <<value object>> {
+    - cents: i64
+    --
+    + new(cents: i64): Result<BidAmount, BidError>
+    + cents(): i64
+    + add(other: BidIncrement): BidAmount
+    + gt(other: BidAmount): bool
+  }
+
+  class BidIncrement <<value object>> {
+    - cents: i64
+    --
+    + new(cents: i64): Result<BidIncrement, BidError>
+    + cents(): i64
+  }
+
+  enum BidError {
+    AuctionNotFound
+    AuctionNotOpen
+    AuctionClosed
+    SelfBidNotAllowed
+    NotHighest
+    BelowMinIncrement
+    InsufficientFunds
+    InvalidAmount
+    Concurrency
+  }
+
+  Auction "1" o-- "1" AuctionState
+  Auction "1" *-- "1" BidAmount : starting_price
+  Auction "1" *-- "1" BidIncrement
+  Auction "1" o-- "0..1" BidAmount : current_highest
+  Bid "*" --> "1" Auction
+  Bid "1" *-- "1" BidAmount
+  Auction ..> BidError : validate_bid
+  BidAmount ..> BidError
+  BidIncrement ..> BidError
+}
+@enduml

@@ -1,0 +1,67 @@
+@startuml
+title BidMart Code Diagram - PlaceBidUseCase Application Layer
+skinparam classAttributeIconSize 0
+
+package "modules::bidding::application::dto" {
+  class PlaceBidCommand {
+    + auction_id: AuctionId
+    + bidder_id: UserId
+    + amount_cents: i64
+  }
+
+  class PlaceBidResult {
+    + bid_id: BidId
+    + auction_id: AuctionId
+    + new_highest_amount_cents: i64
+    + placed_at: DateTime<Utc>
+  }
+}
+
+package "modules::bidding::domain::traits" {
+  interface AuctionRepository {
+    + load_for_update(tx, id: AuctionId): Result<Auction, BidError>
+    + save_current_highest(tx, auction: &Auction): Result<(), BidError>
+  }
+  interface BidRepository {
+    + insert(tx, bid: &Bid): Result<(), BidError>
+    + list_by_auction(auction_id: AuctionId, limit: u32): Result<Vec<Bid>, BidError>
+  }
+  interface WalletGateway {
+    + reserve_funds(user_id: UserId, amount: BidAmount): Result<ReservationId, BidError>
+    + release_funds(reservation_id: ReservationId): Result<(), BidError>
+  }
+  interface BidBroadcaster {
+    + publish_new_highest(auction_id: AuctionId, bid: &Bid)
+  }
+  interface Clock {
+    + now(): DateTime<Utc>
+  }
+  interface TransactionManager {
+    + begin(): Result<Tx, BidError>
+  }
+}
+
+package "modules::bidding::application::use_cases" {
+  class PlaceBidUseCase {
+    - tx_manager: Arc<dyn TransactionManager>
+    - auctions: Arc<dyn AuctionRepository>
+    - bids: Arc<dyn BidRepository>
+    - wallet: Arc<dyn WalletGateway>
+    - broadcaster: Arc<dyn BidBroadcaster>
+    - clock: Arc<dyn Clock>
+    --
+    + new(deps...): PlaceBidUseCase
+    + handle(cmd: PlaceBidCommand): Result<PlaceBidResult, BidError>
+    - validate(auction: &Auction, cmd: &PlaceBidCommand, now: DateTime<Utc>): Result<BidAmount, BidError>
+  }
+}
+
+PlaceBidUseCase ..> PlaceBidCommand
+PlaceBidUseCase ..> PlaceBidResult
+PlaceBidUseCase --> AuctionRepository
+PlaceBidUseCase --> BidRepository
+PlaceBidUseCase --> WalletGateway
+PlaceBidUseCase --> BidBroadcaster
+PlaceBidUseCase --> Clock
+PlaceBidUseCase --> TransactionManager
+@enduml
