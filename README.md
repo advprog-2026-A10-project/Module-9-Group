@@ -22,7 +22,7 @@ Container `core-be` memiliki ownership terhadap `core-db`, yang menyimpan data o
 
 ### 4.2 Component Diagram - Order dan Notifications di dalam `core-be`
 
-![Component Diagram - Order and Notifications](docs/architecture/proper component.png)
+![Component Diagram - Order and Notifications](docs/architecture/propercomponent.png)
 
 Component diagram ini memperluas container `core-be` menjadi komponen-komponen internal yang berkaitan dengan Order dan Notifications.
 
@@ -59,7 +59,7 @@ Alur ini menunjukkan bahwa proses pembuatan order dan pembuatan notification sal
 
 ### 4.4 Code Diagram 2 - Update Shipping / Order Status Flow
 
-![Code Diagram 2 - Update Shipping or Order Status Flow](docs/architecture/code diagram 2.png)
+![Code Diagram 2 - Update Shipping or Order Status Flow](docs/architecture/codediagram2.png)
 
 Code diagram ini menunjukkan bagaimana perubahan status order diproses melalui endpoint seperti `/seller/orders/:orderId/shipping` dan `/orders/:orderId/confirm`.
 
@@ -91,7 +91,7 @@ Alur ini memastikan bahwa user hanya dapat mengakses dan memperbarui notificatio
 
 ### Bonus Component Diagram - Async Notification Worker
 
-![Bonus Component Diagram - Async Notification Worker](docs/architecture/bonus component diagram.png)
+![Bonus Component Diagram - Async Notification Worker](docs/architecture/bonuscomponentdiagram.png)
 
 Bonus component diagram ini menunjukkan improvement masa depan, yaitu memisahkan proses notification dari main request path.
 
@@ -103,7 +103,7 @@ Desain ini berguna ketika BidMart menerima traffic tinggi, terutama saat terjadi
 
 ### Bonus Code Diagram - Async Notification Event Flow
 
-![Bonus Code Diagram - Async Notification Event Flow](docs/architecture/bonus code diagram.png)
+![Bonus Code Diagram - Async Notification Event Flow](docs/architecture/bonuscodediagram.png)
 
 Bonus code diagram ini menunjukkan alur notification berbasis event-driven.
 
