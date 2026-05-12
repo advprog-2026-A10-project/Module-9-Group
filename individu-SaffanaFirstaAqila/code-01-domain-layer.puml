@@ -1,0 +1,161 @@
+@startuml
+title BidMart core-be – Code Diagram 1\nCatalog: Domain Layer\nsrc/modules/catalog/domain/
+skinparam classAttributeIconSize 0
+skinparam componentStyle rectangle
+hide empty members
+
+package "entities/" {
+
+  enum ListingStatus {
+    Draft
+    Active
+    Sold
+    Cancelled
+    Expired
+  }
+
+  class Listing {
+    + id: Uuid
+    + seller_id: Uuid
+    + seller_name: String
+    + category_id: Option<i32>
+    + category_name: String
+    + title: String
+    + description: String
+    + start_price: i64
+    + reserve_price: Option<i64>
+    + current_price: i64
+    + min_increment: i64
+    + bid_count: i32
+    + status: ListingStatus
+    + auction_id: Option<Uuid>
+    + starts_at: DateTime<Utc>
+    + ends_at: DateTime<Utc>
+    + created_at: DateTime<Utc>
+    + updated_at: DateTime<Utc>
+  }
+
+  class Category {
+    + id: i32
+    + parent_id: Option<i32>
+    + name: String
+    + slug: String
+    + image_url: Option<String>
+    + child_count: i32
+    + created_at: DateTime<Utc>
+    + updated_at: DateTime<Utc>
+  }
+
+  class ListingImage {
+    + id: Uuid
+    + listing_id: Uuid
+    + url: String
+    + order: i32
+    + created_at: DateTime<Utc>
+  }
+}
+
+package "traits/  (ports)" {
+
+  class ListingFilter <<struct>> {
+    + keyword: Option<String>
+    + category_ids: Option<Vec<i32>>
+    + min_price: Option<i64>
+    + max_price: Option<i64>
+    + end_before: Option<DateTime<Utc>>
+    + seller_id: Option<Uuid>
+    + status: Option<ListingStatus>
+    + page: i64
+    + page_size: i64
+  }
+
+  interface ListingRepository <<trait>> {
+    + create_listing(...): Listing
+    + get_listing(id): Option<Listing>
+    + list_listings(filter): (Vec<Listing>, total)
+    + update_listing(id, description?): Listing
+    + cancel_listing(id): ()
+  }
+
+  interface CategoryRepository <<trait>> {
+    + get_category(id): Option<Category>
+    + get_category_by_slug(slug): Option<Category>
+    + get_subtree_ids(root_id): Vec<i32>
+    + list_categories(parent_id?): Vec<Category>
+    + create_category(name, slug, parent?, img?): Category
+    + update_category(id, ...): Category
+    + delete_category(id): ()
+  }
+
+  interface ListingImageRepository <<trait>> {
+    + get_listing_images(listing_id): Vec<ListingImage>
+    + replace_listing_images(listing_id, urls): Vec<ListingImage>
+  }
+
+  interface ListingIntegrationPort <<trait>> {
+    + get_listing_status(id): Option<ListingStatus>
+    + update_listing_status(id, status): ()
+    + update_current_price(id, new_price): ()
+    + increment_bid_count(id): ()
+    + link_auction(listing_id, auction_id): ()
+    + update_ends_at(listing_id, new_ends_at): ()
+  }
+}
+
+package "errors/" {
+
+  enum ListingError {
+    NotFound
+    NotEditable
+    NotCancellable
+    NotActive
+    ValidationError(String)
+    DatabaseError(sqlx::Error)
+    InternalError(String)
+    Unauthorized
+    --
+    + into_response()
+    (404 / 409 / 400 / 403 / 500)
+  }
+
+  enum CategoryError {
+    NotFound
+    ParentNotFound
+    AlreadyExists
+    ValidationError(String)
+    DatabaseError(sqlx::Error)
+    InternalError(String)
+    --
+    + into_response()
+  }
+}
+
+Listing "*" --> "1" ListingStatus : has
+Listing "*" --> "0..1" Category : belongs to\n(category_id)
+ListingImage "*" --> "1" Listing : belongs to\n(listing_id)
+Category "0..1" <-- "*" Category : parent_id\n(self-ref hierarchy)
+
+ListingRepository ..> Listing : returns
+ListingRepository ..> ListingFilter : accepts
+CategoryRepository ..> Category : returns
+ListingImageRepository ..> ListingImage : returns
+ListingIntegrationPort ..> ListingStatus : reads / writes
+
+ListingRepository ..> ListingError : Result<_, ListingError>
+CategoryRepository ..> CategoryError : Result<_, CategoryError>
+ListingImageRepository ..> ListingError
+ListingIntegrationPort ..> ListingError
+
+note right of ListingRepository
+  Trait, not a class.
+  Implementations live in
+  infrastructure/repositories/.
+  Use cases depend on Arc<dyn Trait>.
+end note
+
+note bottom of Category
+  Hierarchy is materialised via parent_id
+  and traversed with a recursive CTE
+  in get_subtree_ids(root_id).
+end note
+@enduml

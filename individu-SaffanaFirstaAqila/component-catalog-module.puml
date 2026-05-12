@@ -1,0 +1,121 @@
+@startuml
+title BidMart core-be – Component Diagram\nCatalog Module (Saffana Firsta Aqila)\nC4 Level 3 expansion of the core-be container
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+actor "core-fe\n(Buyer & Seller UI)" as CoreFE <<Container>>
+actor "admin-be\n(internal API caller)" as AdminBE <<Container>>
+component "auth-be\nJWT validation" as AuthBE <<Container>>
+database "core-db\n[PostgreSQL]\nlistings, listing_images,\ncategories" as CoreDB <<Container>>
+
+package "core-be  [Container: Rust + Axum + Tokio]" {
+
+  package "Catalog Module  src/modules/catalog/" {
+
+    package "Infrastructure Layer" {
+      component "AppState\n+ create_router(state)\nDependency Injection root" as AppState <<DI>>
+
+      component "Auth Middleware\nrequire_auth\n→ AuthUser { id, name }" as AuthMW <<Middleware>>
+
+      component "seller_controller\nPOST  /api/v1/seller/listings\nGET   /api/v1/seller/listings\nGET   /api/v1/seller/listings/:id\nPATCH /api/v1/seller/listings/:id\nDELETE /api/v1/seller/listings/:id" as SellerCtrl <<Controller>>
+
+      component "buyer_controller\nGET /api/v1/catalog\nGET /api/v1/catalog/c/:slug\nGET /api/v1/listings/:id" as BuyerCtrl <<Controller>>
+
+      component "category_controller\nGET /api/v1/categories\nGET /api/v1/categories/:id" as CategoryCtrl <<Controller>>
+
+      component "internal_controller\nGET   /internal/listings/:id/status\nPATCH /internal/listings/:id/status\nPATCH /internal/listings/:id/auction\nPATCH /internal/listings/:id/ends-at" as InternalCtrl <<Controller>>
+
+      component "ListingIntegration\nService" as IntService <<Service>>
+
+      component "PostgresListing\nRepository" as PgListingRepo <<Repository>>
+      component "PostgresCategory\nRepository\n(recursive CTE for subtree)" as PgCategoryRepo <<Repository>>
+      component "PostgresListing\nImageRepository" as PgImageRepo <<Repository>>
+      component "PostgresListing\nIntegrationRepository" as PgIntRepo <<Repository>>
+    }
+
+    package "Application Layer" {
+      component "ListingUseCases\n(seller-side CRUD)\n- create_listing\n- list_my_listings\n- get_my_listing\n- update_listing\n- cancel_listing" as ListingUC <<UseCase>>
+
+      component "BuyerListingUseCases\n(buyer-side read)\n- browse_catalog\n- get_public_listing\n- browse_by_category_slug" as BuyerUC <<UseCase>>
+
+      component "CategoryUseCases\n- list_categories\n- get_category_by_id\n- get_category_by_slug" as CategoryUC <<UseCase>>
+
+      component "DTOs\nCreate/UpdateListingRequest\nListingResponse, ListingDetailResponse\nBuyerListingResponse\nPublicListingQueryParams\nPaginatedResponse<T>" as DTOs <<DTO>>
+    }
+
+    package "Domain Layer (pure Rust, no I/O)" {
+      component "Entities\nListing, ListingImage, Category\nenum ListingStatus" as Entities <<Entity>>
+
+      component "Ports / Traits\nListingRepository\nCategoryRepository\nListingImageRepository\nListingIntegrationPort" as Ports <<Port>>
+
+      component "Errors\nListingError, CategoryError\n(impl IntoResponse → HTTP status)" as Errors <<Error>>
+    }
+  }
+
+  package "Other Modules\n(not Saffana's scope)" {
+    component "bidding module" as BiddingMod <<Module>>
+    component "wallet module" as WalletMod <<Module>>
+    component "order module" as OrderMod <<Module>>
+  }
+}
+
+CoreFE --> SellerCtrl : REST + JWT
+CoreFE --> BuyerCtrl : REST (public)
+CoreFE --> CategoryCtrl : REST (public)
+AdminBE --> InternalCtrl : REST internal
+
+SellerCtrl --> AuthMW : layer
+AuthMW --> AuthBE : POST /api/v1/auth/validate\n(JWT verification)
+
+AppState ..> ListingUC : owns Arc
+AppState ..> BuyerUC : owns Arc
+AppState ..> CategoryUC : owns Arc
+AppState ..> IntService : owns Arc
+
+SellerCtrl --> ListingUC : State<AppState>
+BuyerCtrl --> BuyerUC : State<AppState>
+CategoryCtrl --> CategoryUC : State<AppState>
+InternalCtrl --> IntService : State<AppState>
+
+ListingUC ..> Ports : depends on traits\n(Arc<dyn ListingRepository>,\nArc<dyn CategoryRepository>,\nArc<dyn ListingImageRepository>)
+BuyerUC ..> Ports : depends on traits
+CategoryUC ..> Ports : depends on CategoryRepository
+IntService .up.> Ports : implements\nListingIntegrationPort
+
+ListingUC --> DTOs : produces / consumes
+BuyerUC --> DTOs : produces / consumes
+CategoryUC --> DTOs : produces / consumes
+
+ListingUC ..> Entities : uses
+ListingUC ..> Errors : returns
+
+PgListingRepo .up.> Ports : implements\nListingRepository
+PgCategoryRepo .up.> Ports : implements\nCategoryRepository
+PgImageRepo .up.> Ports : implements\nListingImageRepository
+PgIntRepo .up.> Ports : backs\nListingIntegrationPort
+IntService --> PgIntRepo : delegates
+
+PgListingRepo --> CoreDB : SQL (listings)
+PgCategoryRepo --> CoreDB : SQL (categories,\nrecursive CTE)
+PgImageRepo --> CoreDB : SQL (listing_images,\nin transaction)
+PgIntRepo --> CoreDB : SQL (listings status,\nauction_id, ends_at)
+
+BiddingMod --> InternalCtrl : link_auction,\nupdate_ends_at,\nupdate_status
+OrderMod --> InternalCtrl : update_status (SOLD)
+
+note bottom of Ports
+  Hexagonal Architecture:
+  domain defines the interfaces (ports),
+  infrastructure provides the adapters.
+  Use cases never import sqlx / axum.
+end note
+
+note bottom of AppState
+  AppState::new(pool) wires concrete
+  Postgres repositories into the trait
+  objects required by every UseCase.
+  This is the single composition root.
+end note
+@enduml

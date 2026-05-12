@@ -1,0 +1,164 @@
+@startuml
+title BidMart core-be – Code Diagram 3\nCatalog: Infrastructure Layer\nsrc/modules/catalog/infrastructure/
+skinparam classAttributeIconSize 0
+skinparam componentStyle rectangle
+hide empty members
+
+package "domain/traits  (ports)" #EEEEEE {
+  interface ListingRepository <<trait>>
+  interface CategoryRepository <<trait>>
+  interface ListingImageRepository <<trait>>
+  interface ListingIntegrationPort <<trait>>
+}
+
+package "application/use_cases/" #EEEEEE {
+  class ListingUseCases
+  class BuyerListingUseCases
+  class CategoryUseCases
+}
+
+package "infrastructure/middleware/" {
+  class AuthUser <<extension>> {
+    + id: Uuid
+    + name: String
+  }
+  class require_auth <<fn>> {
+    + (req, next) -> Response
+    extracts x-debug-user-id / x-debug-user-name
+    (placeholder — will call auth-be /validate)
+  }
+}
+
+package "infrastructure/controllers/" {
+
+  class seller_controller <<module>> {
+    + list_my_listings(State, Ext<AuthUser>, Query) -> Json
+    + create_listing(State, Ext<AuthUser>, Json)   -> 201
+    + get_my_listing(State, Ext<AuthUser>, Path)
+    + update_listing(State, Ext<AuthUser>, Path, Json)
+    + cancel_listing(State, Ext<AuthUser>, Path) -> 204
+  }
+
+  class buyer_controller <<module>> {
+    + browse_catalog(State, Query<PublicListingQueryParams>)
+    + get_public_listing(State, Path<Uuid>)
+    + browse_by_category_slug(State, Path<String>, Query)
+  }
+
+  class category_controller <<module>> {
+    + list_categories(State, Query)
+    + get_category_by_id(State, Path<i32>)
+  }
+
+  class internal_controller <<module>> {
+    + get_listing_status(State, Path<Uuid>)
+    + update_status(State, Path<Uuid>, Json)
+    + link_auction(State, Path<Uuid>, Json)
+    + update_ends_at(State, Path<Uuid>, Json)
+  }
+}
+
+package "infrastructure/services/" {
+  class ListingIntegrationService {
+    - repo: Arc<PostgresListingIntegrationRepository>
+    + new(pool)
+    + (impl ListingIntegrationPort)
+    + get_listing_status / update_listing_status
+    + link_auction / update_ends_at
+    - update_current_price (queue-backed, TODO)
+    - increment_bid_count   (queue-backed, TODO)
+  }
+}
+
+package "infrastructure/repositories/" {
+
+  class PostgresListingRepository {
+    - pool: PgPool
+    + (impl ListingRepository)
+    + create_listing -> INSERT RETURNING
+    + get_listing    -> SELECT
+    + list_listings  -> SELECT + COUNT
+       with 7 optional filters
+    + update_listing -> UPDATE COALESCE
+    + cancel_listing -> UPDATE status
+  }
+
+  class PostgresCategoryRepository {
+    - pool: PgPool
+    + (impl CategoryRepository)
+    + get_category / get_category_by_slug
+    + list_categories(parent_id?)
+    + create_category  (tx + child_count++)
+    + delete_category  (tx + child_count--)
+    + get_subtree_ids
+       WITH RECURSIVE CTE
+  }
+
+  class PostgresListingImageRepository {
+    - pool: PgPool
+    + (impl ListingImageRepository)
+    + get_listing_images
+    + replace_listing_images
+       (DELETE + INSERT in transaction)
+  }
+
+  class PostgresListingIntegrationRepository {
+    - pool: PgPool
+    + get_listing_status / update_listing_status
+    + link_auction / update_ends_at
+    (raw struct, not a trait — used by
+     ListingIntegrationService)
+  }
+}
+
+class AppState <<DI root>> {
+  + listing_use_cases: Arc<ListingUseCases>
+  + buyer_listing_use_cases: Arc<BuyerListingUseCases>
+  + category_use_cases: Arc<CategoryUseCases>
+  + integration_service: Arc<dyn ListingIntegrationPort>
+  --
+  + new(pool: PgPool) -> Self
+  + create_router(state) -> axum::Router
+  /api/v1/seller/listings  (auth)
+  /api/v1/catalog, /listings/:id
+  /api/v1/categories
+  /internal/listings/*
+}
+
+PostgresListingRepository ..|> ListingRepository : implements
+PostgresCategoryRepository ..|> CategoryRepository : implements
+PostgresListingImageRepository ..|> ListingImageRepository : implements
+ListingIntegrationService ..|> ListingIntegrationPort : implements
+ListingIntegrationService --> PostgresListingIntegrationRepository : delegates
+
+AppState ..> ListingUseCases : owns
+AppState ..> BuyerListingUseCases : owns
+AppState ..> CategoryUseCases : owns
+AppState ..> ListingIntegrationService : owns
+AppState ..> PostgresListingRepository : constructs
+AppState ..> PostgresCategoryRepository : constructs
+AppState ..> PostgresListingImageRepository : constructs
+
+seller_controller ..> ListingUseCases : via State<AppState>
+seller_controller ..> require_auth : .layer()
+buyer_controller ..> BuyerListingUseCases : via State<AppState>
+category_controller ..> CategoryUseCases : via State<AppState>
+internal_controller ..> ListingIntegrationService : via State<AppState>
+
+require_auth ..> AuthUser : inserts into Extensions
+
+note bottom of AppState
+  Composition root. The ONLY place where
+  concrete Postgres* repositories are
+  instantiated. Use cases see only traits,
+  enabling easy test doubles (see
+  tests/use_case_test.rs).
+end note
+
+note right of seller_controller
+  Handlers are thin: extract → call
+  use case → wrap in Json / status code.
+  Errors auto-map to HTTP via
+  ListingError::into_response.
+end note
+@enduml

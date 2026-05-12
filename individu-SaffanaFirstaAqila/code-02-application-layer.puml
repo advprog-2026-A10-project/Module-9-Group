@@ -1,0 +1,160 @@
+@startuml
+title BidMart core-be – Code Diagram 2\nCatalog: Application Layer\nsrc/modules/catalog/application/
+skinparam classAttributeIconSize 0
+skinparam componentStyle rectangle
+hide empty members
+
+package "domain/traits  (ports — abstract dependencies)" #EEEEEE {
+  interface ListingRepository <<trait>>
+  interface CategoryRepository <<trait>>
+  interface ListingImageRepository <<trait>>
+}
+
+package "application/dto/" {
+
+  class CreateListingRequest <<DTO>> {
+    + category_id: Option<i32>
+    + title: String
+    + description: String
+    + image_urls: Vec<String>
+    + start_price: i64
+    + reserve_price: Option<i64>
+    + min_increment: i64
+    + starts_at: DateTime<Utc>
+    + ends_at: DateTime<Utc>
+  }
+
+  class UpdateListingRequest <<DTO>> {
+    + description: Option<String>
+    + image_urls: Option<Vec<String>>
+  }
+
+  class ListingQueryParams <<DTO>> {
+    + page: Option<i64>
+    + page_size: Option<i64>
+  }
+
+  class ListingResponse <<DTO>> {
+    + id, seller_id, seller_name
+    + category_id, category_name
+    + title, description, start_price
+    + reserve_price, current_price
+    + min_increment, bid_count
+    + status, auction_id
+    + starts_at, ends_at
+    + created_at, updated_at
+  }
+
+  class ListingDetailResponse <<DTO>> {
+    + listing: ListingResponse
+    + images: Vec<ListingImageResponse>
+  }
+
+  class ListingImageResponse <<DTO>>
+
+  class BuyerListingResponse <<DTO>> {
+    seller_id hidden
+    (subset of ListingResponse)
+  }
+
+  class BuyerListingDetailResponse <<DTO>> {
+    + listing: BuyerListingResponse
+    + images: Vec<ListingImageResponse>
+  }
+
+  class PublicListingQueryParams <<DTO>> {
+    + q: Option<String>
+    + category_id: Option<i32>
+    + min_price: Option<i64>
+    + max_price: Option<i64>
+    + end_before: Option<DateTime<Utc>>
+    + page, page_size: Option<i64>
+  }
+
+  class "PaginatedResponse<T>" as Paginated <<DTO>> {
+    + data: Vec<T>
+    + total: i64
+    + page: i64
+    + page_size: i64
+  }
+
+  class CategoryResponse <<DTO>>
+}
+
+package "application/use_cases/" {
+
+  class ListingUseCases {
+    - listing_repo: Arc<dyn ListingRepository>
+    - image_repo: Arc<dyn ListingImageRepository>
+    - category_repo: Arc<dyn CategoryRepository>
+    --
+    + new(...)
+    + create_listing(seller_id, name, req) : ListingDetailResponse
+    + list_my_listings(seller_id, params)  : PaginatedResponse<ListingResponse>
+    + get_my_listing(seller_id, id)        : ListingDetailResponse
+    + update_listing(seller_id, id, req)   : ListingDetailResponse
+    + cancel_listing(seller_id, id)        : ()
+    --
+    business rules:
+    - title non-empty, price > 0, ends_at > starts_at > now
+    - reserve_price ≥ start_price (if any)
+    - category must be a leaf (child_count == 0)
+    - only DRAFT can be edited / cancelled
+    - seller_id ownership enforced
+  }
+
+  class BuyerListingUseCases {
+    - listing_repo: Arc<dyn ListingRepository>
+    - image_repo: Arc<dyn ListingImageRepository>
+    - category_repo: Arc<dyn CategoryRepository>
+    --
+    + new(...)
+    + browse_catalog(params) : PaginatedResponse<BuyerListingResponse>
+    + get_public_listing(id) : BuyerListingDetailResponse
+    + browse_by_category_slug(slug, page, ps)
+    --
+    business rules:
+    - always filters status = ACTIVE
+    - category slug → subtree of ids
+      via CategoryRepository::get_subtree_ids
+  }
+
+  class CategoryUseCases {
+    - category_repo: Arc<dyn CategoryRepository>
+    --
+    + list_categories(parent_id?)  : Vec<CategoryResponse>
+    + get_category_by_id(id)       : CategoryResponse
+    + get_category_by_slug(slug)   : CategoryResponse
+  }
+}
+
+ListingUseCases ..> ListingRepository : depends on (DI)
+ListingUseCases ..> ListingImageRepository
+ListingUseCases ..> CategoryRepository
+ListingUseCases ..> CreateListingRequest : input
+ListingUseCases ..> UpdateListingRequest : input
+ListingUseCases ..> ListingDetailResponse : output
+ListingUseCases ..> Paginated : output
+
+BuyerListingUseCases ..> ListingRepository
+BuyerListingUseCases ..> ListingImageRepository
+BuyerListingUseCases ..> CategoryRepository
+BuyerListingUseCases ..> PublicListingQueryParams : input
+BuyerListingUseCases ..> BuyerListingDetailResponse : output
+BuyerListingUseCases ..> Paginated : output
+
+CategoryUseCases ..> CategoryRepository
+CategoryUseCases ..> CategoryResponse : output
+
+ListingDetailResponse --> ListingResponse
+ListingDetailResponse --> ListingImageResponse
+BuyerListingDetailResponse --> BuyerListingResponse
+BuyerListingDetailResponse --> ListingImageResponse
+
+note bottom of ListingUseCases
+  No knowledge of axum, sqlx, or HTTP.
+  Pure business logic against trait objects.
+  Returns ListingError; controllers map it
+  to HTTP via IntoResponse.
+end note
+@enduml

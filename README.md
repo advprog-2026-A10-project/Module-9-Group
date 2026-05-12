@@ -187,3 +187,23 @@ dan membuat failure lebih mudah dideteksi.
 - Tidak ada panah `core-be -> auth-db`.
 - Tidak ada panah `admin-fe -> auth-be` atau `admin-fe -> core-be`.
 
+---
+
+## 4. Individual Component & Code Diagram – Saffana Firsta Aqila (2406440023)
+
+### Component Diagram – `core-be` zoom-in ke Catalog Module
+Diagram ini memperluas container `core-be` dari [Container Diagram](#container-diagram) grup ke komponen-komponen internal modul Catalog.
+
+![Component Diagram – Catalog Module](individu-SaffanaFirstaAqila/component-catalog-module.png)
+
+### Code Diagram 1 – Domain Layer
+![Code Diagram 1 – Domain Layer](individu-SaffanaFirstaAqila/code-01-domain-layer.png)
+
+### Code Diagram 2 – Application Layer
+Business rule yang ditegakkan di sini, antara lain: hanya status `DRAFT` yang boleh diedit/dibatalkan, kepemilikan `seller_id` selalu dicek, kategori harus berupa **leaf** (`child_count == 0`), dan buyer hanya melihat listing `ACTIVE`.
+
+![Code Diagram 2 – Application Layer](individu-SaffanaFirstaAqila/code-02-application-layer.png)
+
+### Code Diagram 3 – Infrastructure Layer
+![Code Diagram 3 – Infrastructure Layer](individu-SaffanaFirstaAqila/code-03-infrastructure-layer.png)
+
