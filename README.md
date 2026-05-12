@@ -1,189 +1,114 @@
-# BidMart - Group A10
+---
 
-## 1. Current Architecture - Context, Container, and Deployment Diagram
+## 4. Arsitektur Individual - Edward Jeremy Worang
 
-### System Context Diagram
+Bagian arsitektur individual ini memperluas modul **Order dan Notifications** pada BidMart. Berdasarkan container diagram kelompok, modul Order dan Notifications terutama berada di dalam container `core-be` karena data order, shipping, dispute, dan notification merupakan bagian dari domain marketplace dan disimpan di `core-db`.
 
-System Context Diagram ini memberikan gambaran ekosistem platform BidMart sebagai
-sistem marketplace dan lelang real-time.
-
-Diagram ini sengaja dibuat high-level. Aktor pengguna berinteraksi melalui
-interface BidMart, administrator berinteraksi melalui admin interface, dan sistem
-bergantung pada layanan eksternal untuk pengiriman email verifikasi, reset
-password, dan MFA.
-
-Diagram konteks tidak menampilkan database karena detail kepemilikan data berada
-pada container dan deployment diagram.
-
-![Current Context Diagram](docs/architecture/current-context.png)
-
-**Aktor dan sistem eksternal yang terlibat:**
-
-- **Buyer/User**: Pengguna yang melakukan autentikasi, mengakses marketplace,
-  mengikuti lelang, membuat bid, dan mengelola transaksi.
-- **Seller/User**: Pengguna yang melakukan autentikasi, membuat listing,
-  mengelola barang, dan memproses pesanan.
-- **Admin**: Pengguna internal yang mengakses admin interface untuk moderasi,
-  laporan, dan operasi platform.
-- **Email Provider**: Sistem eksternal yang digunakan oleh auth service untuk
-  email verification, password reset, dan MFA email.
+Diagram-diagram berikut menjelaskan fokus container individual, struktur komponen internal, dan alur kode yang berkaitan dengan modul yang saya kerjakan.
 
 ---
 
-### Container Diagram
+### 4.1 Individual Container Diagram - Order dan Notifications
 
-BidMart menggunakan arsitektur multi-container yang memisahkan frontend, backend,
-dan kepemilikan database berdasarkan batas layanan.
+![Individual Container Diagram - Order and Notifications](docs/architecture/Container.png)
 
-Relasi antarkomponen dibuat eksplisit untuk mencegah coupling yang salah:
+Individual container diagram ini berfokus pada container yang berkaitan langsung dengan modul Order dan Notifications.
 
-- `auth-fe` hanya memanggil `auth-be`.
-- `core-fe` hanya memanggil `core-be`.
-- `admin-fe` hanya memanggil `admin-be`.
+Container utama pada modul ini adalah `core-be`, yang menangani endpoint order untuk buyer, endpoint order untuk seller, endpoint notification, serta event publishing untuk notification. `core-fe` berkomunikasi dengan `core-be` melalui HTTPS/REST, sedangkan `admin-fe` berkomunikasi dengan `admin-be` untuk kebutuhan admin order dan notification views.
 
-![Current Container Diagram](docs/architecture/current-container.png)
-
-**Container yang ada:**
-
-- **auth-fe**: Frontend untuk autentikasi dan account/settings UI. Container ini
-  hanya memanggil `auth-be`.
-- **core-fe**: Frontend untuk marketplace, listing, auction, bid, order, wallet,
-  dan fitur core lain. Container ini hanya memanggil `core-be`.
-- **admin-fe**: Frontend untuk admin/moderation UI. Container ini hanya memanggil
-  `admin-be`.
-- **auth-be**: Backend autentikasi. Service ini memiliki `auth-db` dan menangani
-  users, credentials, sessions, verification tokens, password reset tokens, MFA
-  data, dan security settings.
-- **core-be**: Backend marketplace. Service ini memiliki `core-db` dan menangani
-  listings, auctions, bids, orders, wallets, notifications, dan marketplace data.
-- **admin-be**: Backend admin. Service ini tidak memiliki akses database langsung.
-  Untuk user/account data, `admin-be` memanggil `auth-be`. Untuk listing,
-  auction, order, report, atau moderation data, `admin-be` memanggil `core-be`.
-- **auth-db**: Database milik `auth-be`.
-- **core-db**: Database milik `core-be`.
-- **Email Provider**: Layanan eksternal untuk email verification, reset password,
-  dan MFA email.
-
-**Aturan kepemilikan data:**
-
-- `auth-be -> auth-db` adalah satu-satunya akses langsung ke `auth-db`.
-- `core-be -> core-db` adalah satu-satunya akses langsung ke `core-db`.
-- `admin-be` tidak boleh mengakses `auth-db` atau `core-db` secara langsung.
-- Tidak ada akses silang seperti `auth-be -> core-db` atau `core-be -> auth-db`.
+Container `core-be` memiliki ownership terhadap `core-db`, yang menyimpan data order dan notification. Hal ini mengikuti aturan arsitektur kelompok bahwa `core-be` adalah satu-satunya backend service yang boleh mengakses `core-db` secara langsung. Diagram ini juga menunjukkan komponen pendukung masa depan seperti Redis cache, message queue, notification worker, email provider, dan monitoring/logging.
 
 ---
 
-### Deployment Diagram
+### 4.2 Component Diagram - Order dan Notifications di dalam `core-be`
 
-Deployment Diagram menunjukkan bagaimana container dijalankan pada runtime
-environment dan tetap mempertahankan aturan dependency yang sama dengan container
-diagram.
+![Component Diagram - Order and Notifications](docs/architecture/proper component.png)
 
-Browser pengguna mengakses auth/core frontend, browser admin mengakses admin
-frontend, dan setiap frontend memanggil backend pasangannya. `admin-be`
-melakukan orchestration melalui API `auth-be` dan `core-be`, bukan melalui
-database.
+Component diagram ini memperluas container `core-be` menjadi komponen-komponen internal yang berkaitan dengan Order dan Notifications.
 
-![Current Deployment Diagram](docs/architecture/current-deployment.png)
+Komponen utama yang ditampilkan adalah:
 
-**Deployment utama:**
+- **Order Controller**: Menangani endpoint order untuk buyer seperti `/orders`, `/orders/:orderId`, `/orders/:orderId/confirm`, dan `/orders/:orderId/dispute/new`.
+- **Seller Order Controller**: Menangani endpoint order untuk seller seperti `/seller/orders`, `/seller/orders/:orderId`, dan `/seller/orders/:orderId/shipping`.
+- **Notification Controller**: Menangani endpoint notification seperti `/notifications`, `/notifications/:notificationId`, dan `/notifications/:notificationId/read`.
+- **Order Service**: Berisi business logic order, seperti membuat order, memvalidasi state order, dan memperbarui status order.
+- **Shipping Service**: Menangani pembaruan order yang berkaitan dengan shipping.
+- **Dispute Service**: Menangani pembuatan dispute pada order.
+- **Notification Service**: Membuat dan mengelola notification.
+- **Notification Event Publisher**: Mempublikasikan event notification setelah terjadi perubahan pada order.
+- **Order Repository**: Membaca dan menulis data order ke `core-db`.
+- **Notification Repository**: Membaca dan menulis data notification ke `core-db`.
 
-- **User Device**: Menjalankan user browser untuk auth/settings dan marketplace
-  UI.
-- **Admin Device**: Menjalankan admin browser untuk admin UI.
-- **Frontend Hosting / Container Host**: Menjalankan `auth-fe`, `core-fe`, dan
-  `admin-fe`.
-- **Backend Runtime / Container Host**: Menjalankan `auth-be`, `core-be`, dan
-  `admin-be`.
-- **Database Runtime**: Menyediakan dua database, yaitu `auth-db` dan `core-db`.
-- **GitHub Actions + GHCR**: CI/CD, Docker build, image scan, dan image registry.
-- **Email Provider**: Dipanggil oleh `auth-be` untuk kebutuhan auth/security
-  email.
+Component diagram ini konsisten dengan container diagram kelompok karena seluruh operasi order dan notification tetap berada dalam batas ownership `core-be -> core-db`.
 
 ---
 
-## 2. Future Architecture - After Risk Storming
+### 4.3 Code Diagram 1 - Create Order Flow
 
-Future architecture mempertahankan batas kepemilikan data yang sama, tetapi
-menambahkan komponen yang secara langsung mengurangi risiko ketika trafik
-BidMart meningkat.
+![Code Diagram 1 - Create Order Flow](docs/architecture/codediagram1.png)
 
-Perubahan utama bukan menambah akses database, melainkan memperjelas routing,
-ownership, observability, dan pemrosesan asynchronous.
+Code diagram ini menunjukkan bagaimana endpoint `/orders` diproses.
 
-### Future Context Diagram
+Alur dimulai ketika buyer mengirim request pembuatan order dari `core-fe`. Request tersebut dikirim ke **Order Controller**, lalu diteruskan ke **Order Service**. Service melakukan validasi data order dan menggunakan **Order Repository** untuk menyimpan order baru ke dalam `core-db`.
 
-![Future Context Diagram](docs/architecture/future-context.png)
+Setelah order berhasil dibuat, sistem juga memicu pembuatan notification melalui **Notification Event Publisher** dan **Notification Service**. Notification kemudian disimpan melalui **Notification Repository** ke dalam `core-db`.
 
-Pada future context, pengguna dan admin tetap mengakses BidMart melalui interface
-yang berbeda. Platform boundary menjadi lebih eksplisit karena ada gateway,
-service boundary yang jelas, dan monitoring/logging untuk mendeteksi masalah
-operasional ketika traffic naik.
-
-Email provider tetap menjadi dependency eksternal untuk proses verification,
-password reset, MFA, dan notifikasi yang relevan.
-
-### Future Container Diagram
-
-![Future Container Diagram](docs/architecture/future-container.png)
-
-**Perubahan arsitektur masa depan:**
-
-- **API Gateway / Load Balancer**: Mengatur ingress, routing, rate limiting, dan
-  membantu mitigasi traffic spike.
-- **Auth Service**: Tetap memiliki hanya `auth-db`.
-- **Core Service**: Tetap memiliki hanya `core-db`.
-- **Admin Service**: Tetap tidak memiliki database langsung dan melakukan
-  orchestration melalui API auth/core.
-- **Redis Cache**: Digunakan untuk session/token lookup dan hot auction cache
-  tanpa mengubah kepemilikan database.
-- **Message Queue + Background Worker**: Memindahkan pekerjaan email dan
-  notification dari request path utama agar sistem lebih tahan terhadap latency
-  provider eksternal.
-- **Monitoring / Logging**: Memberi visibility terhadap error rate, latency,
-  throughput, dan bottleneck tiap service.
+Alur ini menunjukkan bahwa proses pembuatan order dan pembuatan notification saling terhubung, tetapi keduanya tetap berada di dalam batas modul `core-be`.
 
 ---
 
-## 3. Explanation of Risk Storming
+### 4.4 Code Diagram 2 - Update Shipping / Order Status Flow
 
-Risk storming diterapkan karena BidMart berpotensi mengalami risiko arsitektural
-ketika sukses dan menerima traffic tinggi, terutama saat auction berjalan
-real-time.
+![Code Diagram 2 - Update Shipping or Order Status Flow](docs/architecture/code diagram 2.png)
 
-Risiko terbesar bukan hanya performa, tetapi juga batas kepemilikan service yang
-kabur. Jika `admin-be` mengakses `auth-db` dan `core-db` secara langsung, admin
-backend akan menjadi tightly coupled dengan skema database service lain.
-Akibatnya, perubahan schema auth atau core bisa merusak admin, business rules
-bisa terduplikasi atau terlewati, audit keamanan menjadi lebih sulit, dan
-scaling antarservice menjadi lebih berisiko.
+Code diagram ini menunjukkan bagaimana perubahan status order diproses melalui endpoint seperti `/seller/orders/:orderId/shipping` dan `/orders/:orderId/confirm`.
 
-Risiko lain yang ditemukan adalah authentication/session bottleneck, database
-contention saat auction ramai, kegagalan pengiriman email/MFA, kurangnya
-observability, dan deployment rollback risk. Pada arsitektur yang salah, service
-dapat saling bergantung melalui shared database access. Pola ini membuat
-ownership tidak jelas: auth data, marketplace data, dan admin operation terlihat
-menyatu padahal seharusnya dipisahkan oleh API contract.
+Untuk update shipping oleh seller, seller mengirim request dari `core-fe` ke **Order Controller**. Request tersebut diproses oleh **Order Service**, yang kemudian memeriksa data order melalui **Order Repository**. Jika seller memiliki otorisasi dan state order valid, status order diperbarui di `core-db`.
 
-Future architecture memperbaiki risiko tersebut dengan menegakkan ownership:
-auth service hanya mengakses `auth-db`, core service hanya mengakses `core-db`,
-dan admin service hanya memanggil auth/core melalui REST/internal API. Auth data
-tetap terisolasi, marketplace data tetap terisolasi, dan admin operation menjadi
-orchestration layer, bukan pemilik data.
+Untuk konfirmasi order oleh buyer, buyer mengonfirmasi bahwa order sudah diterima. Service memvalidasi bahwa buyer merupakan pemilik order dan order berada pada state yang dapat dikonfirmasi. Setelah status order diperbarui, notification event dipicu agar user terkait dapat menerima informasi perubahan order.
 
-Gateway/load balancer, cache, queue, worker, dan monitoring ditambahkan hanya
-karena masing-masing memiliki mitigasi risiko yang jelas: mengurangi bottleneck
-ingress, mengurangi read pressure, menghindari blocking pada email/notification,
-dan membuat failure lebih mudah dideteksi.
+Diagram ini menunjukkan bagaimana modul menjaga konsistensi state order sekaligus memicu notification setelah terjadi perubahan penting pada order.
 
 ---
 
-## Validation Notes
+### 4.5 Code Diagram 3 - Notification Read / Mark as Read Flow
 
-- Diagram ini hanya menggunakan dua database: `auth-db` dan `core-db`.
-- Tidak ada panah `admin-be -> auth-db`.
-- Tidak ada panah `admin-be -> core-db`.
-- Tidak ada panah `auth-be -> core-db`.
-- Tidak ada panah `core-be -> auth-db`.
-- Tidak ada panah `admin-fe -> auth-be` atau `admin-fe -> core-be`.
+![Code Diagram 3 - Notification Read Flow](docs/architecture/codediagram3.png)
 
+Code diagram ini menunjukkan bagaimana retrieval notification dan update read status diproses.
+
+Untuk endpoint `/notifications`, **Notification Controller** memanggil **Notification Service**, yang mengambil daftar notification milik user dari `core-db` melalui **Notification Repository**.
+
+Untuk endpoint `/notifications/:notificationId`, service mengambil notification tertentu dan memvalidasi bahwa notification tersebut memang milik user yang sedang login.
+
+Untuk endpoint `/notifications/:notificationId/read`, service memvalidasi ownership notification dan memperbarui read status notification di `core-db`.
+
+Alur ini memastikan bahwa user hanya dapat mengakses dan memperbarui notification miliknya sendiri.
+
+---
+
+## Bonus - Async Notification Worker
+
+### Bonus Component Diagram - Async Notification Worker
+
+![Bonus Component Diagram - Async Notification Worker](docs/architecture/bonus component diagram.png)
+
+Bonus component diagram ini menunjukkan improvement masa depan, yaitu memisahkan proses notification dari main request path.
+
+Daripada memproses notification langsung di dalam alur request order, **Order Service** dapat mempublikasikan event melalui **Notification Event Publisher**. Event tersebut dimasukkan ke dalam **Message Queue**, lalu dikonsumsi oleh **Notification Worker**. Worker kemudian memanggil **Notification Service**, yang menyimpan data notification dan mengirim email notification jika diperlukan.
+
+Desain ini berguna ketika BidMart menerima traffic tinggi, terutama saat terjadi spike pada aktivitas auction atau marketplace. Pemrosesan notification dapat diskalakan secara terpisah dengan menambahkan lebih banyak worker.
+
+---
+
+### Bonus Code Diagram - Async Notification Event Flow
+
+![Bonus Code Diagram - Async Notification Event Flow](docs/architecture/bonus code diagram.png)
+
+Bonus code diagram ini menunjukkan alur notification berbasis event-driven.
+
+Request order diproses terlebih dahulu melalui alur order normal. Setelah order disimpan atau diperbarui, **Order Service** mempublikasikan event `OrderCreated` atau `OrderStatusUpdated`. Event tersebut dimasukkan ke dalam queue, dan main request dapat segera mengembalikan response kepada user tanpa harus menunggu proses delivery notification selesai.
+
+Setelah itu, **Notification Worker** mengonsumsi event tersebut, membuat notification melalui **Notification Service**, menyimpannya ke `core-db`, dan mengirim email melalui **Email Provider** jika diperlukan. Jika pengiriman email gagal, failure tersebut dapat dicatat melalui monitoring dan ditangani menggunakan retry atau dead-letter queue.
+
+Pendekatan ini meningkatkan scalability karena proses notification delivery yang lambat tidak memblokir request utama order.
