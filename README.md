@@ -142,3 +142,48 @@ password reset, MFA, dan notifikasi yang relevan.
   provider eksternal.
 - **Monitoring / Logging**: Memberi visibility terhadap error rate, latency,
   throughput, dan bottleneck tiap service.
+
+---
+
+## 3. Explanation of Risk Storming
+
+Risk storming diterapkan karena BidMart berpotensi mengalami risiko arsitektural
+ketika sukses dan menerima traffic tinggi, terutama saat auction berjalan
+real-time.
+
+Risiko terbesar bukan hanya performa, tetapi juga batas kepemilikan service yang
+kabur. Jika `admin-be` mengakses `auth-db` dan `core-db` secara langsung, admin
+backend akan menjadi tightly coupled dengan skema database service lain.
+Akibatnya, perubahan schema auth atau core bisa merusak admin, business rules
+bisa terduplikasi atau terlewati, audit keamanan menjadi lebih sulit, dan
+scaling antarservice menjadi lebih berisiko.
+
+Risiko lain yang ditemukan adalah authentication/session bottleneck, database
+contention saat auction ramai, kegagalan pengiriman email/MFA, kurangnya
+observability, dan deployment rollback risk. Pada arsitektur yang salah, service
+dapat saling bergantung melalui shared database access. Pola ini membuat
+ownership tidak jelas: auth data, marketplace data, dan admin operation terlihat
+menyatu padahal seharusnya dipisahkan oleh API contract.
+
+Future architecture memperbaiki risiko tersebut dengan menegakkan ownership:
+auth service hanya mengakses `auth-db`, core service hanya mengakses `core-db`,
+dan admin service hanya memanggil auth/core melalui REST/internal API. Auth data
+tetap terisolasi, marketplace data tetap terisolasi, dan admin operation menjadi
+orchestration layer, bukan pemilik data.
+
+Gateway/load balancer, cache, queue, worker, dan monitoring ditambahkan hanya
+karena masing-masing memiliki mitigasi risiko yang jelas: mengurangi bottleneck
+ingress, mengurangi read pressure, menghindari blocking pada email/notification,
+dan membuat failure lebih mudah dideteksi.
+
+---
+
+## Validation Notes
+
+- Diagram ini hanya menggunakan dua database: `auth-db` dan `core-db`.
+- Tidak ada panah `admin-be -> auth-db`.
+- Tidak ada panah `admin-be -> core-db`.
+- Tidak ada panah `auth-be -> core-db`.
+- Tidak ada panah `core-be -> auth-db`.
+- Tidak ada panah `admin-fe -> auth-be` atau `admin-fe -> core-be`.
+
