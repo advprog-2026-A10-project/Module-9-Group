@@ -45,7 +45,7 @@ Component diagram ini konsisten dengan container diagram kelompok karena seluruh
 
 ### 4.3 Code Diagram 1 - Create Order Flow
 
-![Code Diagram 1 - Create Order Flow](docs/architecture/codediagram1.png)
+![Code Diagram 1 - Create Order Flow](docs/architecture/codediagram1fix.png)
 
 Code diagram ini menunjukkan bagaimana endpoint `/orders` diproses.
 
@@ -59,7 +59,7 @@ Alur ini menunjukkan bahwa proses pembuatan order dan pembuatan notification sal
 
 ### 4.4 Code Diagram 2 - Update Shipping / Order Status Flow
 
-![Code Diagram 2 - Update Shipping or Order Status Flow](docs/architecture/codediagram2.png)
+![Code Diagram 2 -Update Shipping or Order Status Flow](docs/architecture/codediagram2fix.png)
 
 Code diagram ini menunjukkan bagaimana perubahan status order diproses melalui endpoint seperti `/seller/orders/:orderId/shipping` dan `/orders/:orderId/confirm`.
 
@@ -73,7 +73,7 @@ Diagram ini menunjukkan bagaimana modul menjaga konsistensi state order sekaligu
 
 ### 4.5 Code Diagram 3 - Notification Read / Mark as Read Flow
 
-![Code Diagram 3 - Notification Read Flow](docs/architecture/codediagram3.png)
+![Code Diagram 3 - Notification Read Flow](docs/architecture/codediagram3fix.png)
 
 Code diagram ini menunjukkan bagaimana retrieval notification dan update read status diproses.
 
@@ -103,7 +103,7 @@ Desain ini berguna ketika BidMart menerima traffic tinggi, terutama saat terjadi
 
 ### Bonus Code Diagram - Async Notification Event Flow
 
-![Bonus Code Diagram - Async Notification Event Flow](docs/architecture/bonuscodediagram.png)
+![Bonus Code Diagram - Async Notification Event Flow](docs/architecture/bonuscodediagramfix.png)
 
 Bonus code diagram ini menunjukkan alur notification berbasis event-driven.
 
