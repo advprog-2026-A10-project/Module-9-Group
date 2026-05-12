@@ -1,55 +1,66 @@
 @startuml
 title Bonus Component Diagram - MFA Settings
-left to right direction
+top to bottom direction
 skinparam componentStyle rectangle
-skinparam linetype ortho
+skinparam linetype polyline
+skinparam nodesep 70
+skinparam ranksep 75
+skinparam wrapWidth 210
+skinparam packageStyle rectangle
 
 package "Auth Frontend MFA Settings" as AuthFE <<Frontend>> {
-  component "mfa-page" as MfaPage <<Page>>
-  component "mfa-totp-setup-page" as TotpPage <<Page>>
-  component "mfa-email-setup-page" as EmailPage <<Page>>
-  component "mfa-disable-page" as DisablePage <<Page>>
+  package "MFA pages" as MFAPages {
+    component "mfa-page" as MfaPage <<Page>>
+    component "mfa-totp-setup-page" as TotpPage <<Page>>
+    component "mfa-email-setup-page" as EmailPage <<Page>>
+    component "mfa-disable-page" as DisablePage <<Page>>
+  }
   component "MFA hooks\nuseGetMfaStatusQuery\nuseSetupMfaTotpMutation\nuseVerifyMfaTotpMutation\nuseSetupMfaEmailMutation\nuseVerifyMfaEmailMutation\nuseDisableMfaMutation" as MfaHooks <<Hooks>>
   component "SettingsApiRepository" as SettingsRepo <<Repository>>
 }
 
 package "Auth Backend MFA Settings" as AuthBE <<Backend>> {
-  component "MFA Controllers\nget_mfa_settings\nsetup_totp\nverify_totp_setup\nsetup_email_mfa\nverify_email_mfa_setup\ndisable_mfa" as Controllers <<Controller>>
-  component "AuthenticatedUser\nJWT/session extractor" as AuthExtractor <<Middleware>>
+  package "MFA HTTP boundary" as MFAHttp {
+    component "MFA controllers\nget_mfa_settings\nsetup_totp\nverify_totp_setup\nsetup_email_mfa\nverify_email_mfa_setup\ndisable_mfa" as Controllers <<Controller>>
+    component "AuthenticatedUser\nJWT/session extractor" as AuthExtractor <<Middleware>>
+  }
+
   component "AuthMfaUseCase" as AuthMfa <<Use Case>>
-  component "TotpRsService" as TotpService <<Service>>
-  component "ResendVerificationEmailSender" as EmailSender <<Service>>
-  component "PostgresTotpSetupRepository" as TotpSetupRepo <<Repository>>
-  component "PostgresEmailMfaCodeRepository" as EmailCodeRepo <<Repository>>
-  component "PostgresUserRepository" as UserRepo <<Repository>>
+
+  package "MFA services" as MFAServices {
+    component "TotpRsService" as TotpService <<Service>>
+    component "ResendVerificationEmailSender" as EmailSender <<Service>>
+  }
+
+  package "MFA repositories" as MFARepos {
+    component "PostgresTotpSetupRepository" as TotpSetupRepo <<Repository>>
+    component "PostgresEmailMfaCodeRepository" as EmailCodeRepo <<Repository>>
+    component "PostgresUserRepository" as UserRepo <<Repository>>
+  }
 }
 
-database "Auth PostgreSQL" as AuthDB <<Database>>
+database "Auth PostgreSQL\nauth-db" as AuthDB <<Database>>
 cloud "Resend Email Provider" as Resend <<External System>>
 
-MfaPage --> MfaHooks : read MFA status
-TotpPage --> MfaHooks : setup/verify TOTP
-EmailPage --> MfaHooks : setup/verify email MFA
-DisablePage --> MfaHooks : disable MFA
-MfaHooks --> SettingsRepo : execute settings API calls
+MFAPages --> MfaHooks : calls
+MfaHooks --> SettingsRepo : API use
+SettingsRepo --> Controllers : REST
 
-SettingsRepo --> Controllers : REST /settings/security/mfa/*
-Controllers --> AuthExtractor : require authenticated user
-Controllers --> AuthMfa : call MFA use cases
+Controllers --> AuthExtractor : auth guard
+Controllers --> AuthMfa : delegates
 
-AuthMfa --> TotpService : generate secret\nverify TOTP code
-AuthMfa --> TotpSetupRepo : save/consume setup ticket
-AuthMfa --> EmailSender : send email MFA code
-AuthMfa --> EmailCodeRepo : save/consume email code
-AuthMfa --> UserRepo : enable/disable MFA flags
+AuthMfa --> TotpService : TOTP
+AuthMfa --> TotpSetupRepo : setup ticket
+AuthMfa --> EmailSender : email code
+AuthMfa --> EmailCodeRepo : email code
+AuthMfa --> UserRepo : MFA flags
 
-TotpSetupRepo --> AuthDB : persist TOTP setup
-EmailCodeRepo --> AuthDB : persist email MFA code
-UserRepo --> AuthDB : persist user MFA flags
+TotpSetupRepo --> AuthDB : SQLx
+EmailCodeRepo --> AuthDB : SQLx
+UserRepo --> AuthDB : SQLx
 EmailSender --> Resend : email API
 
 note bottom of AuthDB
 MFA data persists only to Auth PostgreSQL.
-Only the auth service data boundary is in scope.
 end note
 @enduml

@@ -3,11 +3,15 @@ title Individual Component Diagram - Auth Settings Security
 left to right direction
 skinparam componentStyle rectangle
 skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam wrapWidth 200
+skinparam packageStyle rectangle
 
 package "Auth Frontend Container" as AuthFE <<Frontend>> {
   component "Settings Pages\nprofile-page\nsecurity-page\nsessions-page\nnotifications-page\nmfa-page" as Pages <<Presentation>>
   component "Settings Hooks\nuseGetMfaStatusQuery\nuseChangePasswordMutation\nuseGetSessionsQuery\nuseUpdateNotificationPreferencesMutation" as Hooks <<Hooks>>
-  component "Settings Use Cases\nGetMfaStatusUseCase\nChangePasswordUseCase\nGetSessionsUseCase\nUpdateNotificationPreferencesUseCase" as FEUseCases <<Application>>
+  component "Settings Use Cases\nGetMfaStatusUseCase\nChangePasswordUseCase\nGetSessionsUseCase\nUpdateNotificationPreferencesUseCase" as FEUseCases <<Use Case>>
   component "SettingsApiRepository" as SettingsApiRepo <<Repository>>
   component "apiClient\nBearer access token" as ApiClient <<HTTP Client>>
   component "Zod settings schemas\nsettings-api/schemas.ts" as ZodSchemas <<Validation>>
@@ -16,48 +20,29 @@ package "Auth Frontend Container" as AuthFE <<Frontend>> {
 package "Auth Backend Container" as AuthBE <<Backend>> {
   component "Settings/Auth Controllers\nget_profile\nupdate_profile\nchange_password\nget_sessions\nrevoke_session\nrevoke_all_sessions\nget_notification_preferences\nupdate_notification_preferences\nget_mfa_settings" as Controllers <<Controller>>
   component "AuthenticatedUser\nJWT/session extractor" as AuthExtractor <<Middleware>>
-  component "AuthMfaUseCase" as AuthMfa <<Use Case>>
-  component "PostgresUserRepository" as UserRepo <<Repository>>
-  component "PostgresSessionRepository" as SessionRepo <<Repository>>
-  component "PostgresNotificationPreferencesRepository" as PrefRepo <<Repository>>
-  component "PostgresEmailMfaCodeRepository" as EmailCodeRepo <<Repository>>
-  component "PostgresTotpSetupRepository" as TotpSetupRepo <<Repository>>
-  component "ScryptPasswordHasher" as PasswordHasher <<Service>>
-  component "TotpRsService" as TotpService <<Service>>
-  component "ResendVerificationEmailSender" as EmailSender <<Service>>
+  component "AuthMfaUseCase\nsettings and MFA use cases" as AuthMfa <<Use Case>>
+  component "PostgreSQL Repositories\nPostgresUserRepository\nPostgresSessionRepository\nPostgresNotificationPreferencesRepository\nPostgresEmailMfaCodeRepository\nPostgresTotpSetupRepository" as AuthRepos <<Repository>>
+  component "Security and Email Services\nScryptPasswordHasher\nTotpRsService\nResendVerificationEmailSender" as AuthServices <<Service>>
 }
 
 database "Auth PostgreSQL\nauth-db owned by auth-be" as AuthDB <<Database>>
 cloud "Resend Email Provider" as Resend <<External System>>
 
-Pages --> Hooks : user actions\nand queries
-Hooks --> FEUseCases : execute use cases
-FEUseCases --> SettingsApiRepo : ISettingsRepository
-SettingsApiRepo --> ZodSchemas : validate API responses
-SettingsApiRepo --> ApiClient : REST /settings/*
-ApiClient --> Controllers : HTTPS REST\nAuthorization: Bearer token
+Pages --> Hooks
+Hooks --> FEUseCases
+FEUseCases --> SettingsApiRepo
+SettingsApiRepo --> ZodSchemas
+SettingsApiRepo --> ApiClient
+ApiClient --> Controllers
 
-Controllers --> AuthExtractor : require authenticated user
-Controllers --> AuthMfa : validate DTOs\ncall use case
+Controllers --> AuthExtractor
+Controllers --> AuthMfa
+AuthMfa --> AuthRepos
+AuthMfa --> AuthServices
+AuthRepos --> AuthDB
+AuthServices --> Resend
 
-AuthMfa --> UserRepo : profile, password,\nMFA user flags
-AuthMfa --> SessionRepo : list/revoke sessions
-AuthMfa --> PrefRepo : notification preferences
-AuthMfa --> EmailCodeRepo : email MFA codes
-AuthMfa --> TotpSetupRepo : TOTP setup tickets
-AuthMfa --> PasswordHasher : verify/hash password
-AuthMfa --> TotpService : generate/verify TOTP
-AuthMfa --> EmailSender : send MFA email
-
-UserRepo --> AuthDB : SQLx auth data
-SessionRepo --> AuthDB : SQLx sessions
-PrefRepo --> AuthDB : SQLx preferences
-EmailCodeRepo --> AuthDB : SQLx email MFA
-TotpSetupRepo --> AuthDB : SQLx TOTP setup
-EmailSender --> Resend : email API
-
-note bottom of AuthBE
-Auth Backend owns Auth PostgreSQL.
-Only the auth service data boundary is in scope.
+note bottom of AuthDB
+This individual diagram expands only auth-fe -> auth-be -> auth-db.
 end note
 @enduml

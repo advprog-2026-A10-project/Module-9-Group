@@ -1,118 +1,97 @@
 @startuml
 title Code Diagram - Auth Frontend Settings
-top to bottom direction
+left to right direction
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 65
+skinparam wrapWidth 190
 hide empty members
 
-package "Pages" {
-  class ProfilePage
-  class SecurityPage
-  class SessionsPage
-  class NotificationsPage
-  class MfaPage
+class "Settings Pages" as SettingsPages <<module>> {
+  +ProfilePage
+  +SecurityPage
+  +SessionsPage
+  +NotificationsPage
+  +MfaPage
 }
 
-package "Hooks" {
-  class useGetProfileQuery
-  class useUpdateProfileMutation
-  class useChangePasswordMutation
-  class useGetSessionsQuery
-  class useRevokeSessionMutation
-  class useGetNotificationPreferencesQuery
-  class useUpdateNotificationPreferencesMutation
-  class useGetMfaStatusQuery
+class "Settings Hooks" as SettingsHooks <<module>> {
+  +useGetProfileQuery
+  +useUpdateProfileMutation
+  +useChangePasswordMutation
+  +useGetSessionsQuery
+  +useRevokeSessionMutation
+  +useGetNotificationPreferencesQuery
+  +useUpdateNotificationPreferencesMutation
+  +useGetMfaStatusQuery
 }
 
-package "Use Cases" {
-  class GetProfileUseCase
-  class UpdateProfileUseCase
-  class ChangePasswordUseCase
-  class GetSessionsUseCase
-  class RevokeSessionUseCase
-  class GetNotificationPreferencesUseCase
-  class UpdateNotificationPreferencesUseCase
-  class GetMfaStatusUseCase
+class "Settings Use Cases" as SettingsUseCases <<module>> {
+  +GetProfileUseCase
+  +UpdateProfileUseCase
+  +ChangePasswordUseCase
+  +GetSessionsUseCase
+  +RevokeSessionUseCase
+  +GetNotificationPreferencesUseCase
+  +UpdateNotificationPreferencesUseCase
+  +GetMfaStatusUseCase
 }
 
-package "Domain" {
-  interface ISettingsRepository
-  class UserProfile
-  class Session
-  class NotificationPreferences
-  class MfaStatus
+interface ISettingsRepository
+
+class SettingsApiRepository {
+  +getProfile()
+  +updateProfile(data)
+  +changePassword(data)
+  +getSessions()
+  +revokeSession(sessionId)
+  +getNotificationPreferences()
+  +updateNotificationPreferences(data)
+  +getMfaStatus()
 }
 
-package "Infrastructure" {
-  class SettingsApiRepository {
-    -basePath: string = "/settings"
-    +getProfile()
-    +updateProfile(data)
-    +changePassword(data)
-    +getSessions()
-    +revokeSession(sessionId)
-    +getNotificationPreferences()
-    +updateNotificationPreferences(data)
-    +getMfaStatus()
-  }
-  class SettingsApiMapper
-  class "settings-api/schemas.ts" as ZodSchemas {
-    +getProfileApiSchema
-    +updateProfileApiSchema
-    +getSessionsApiSchema
-    +getNotificationPreferencesApiSchema
-    +getMfaStatusApiSchema
-  }
-  class apiClient {
-    +get(path)
-    +post(path, body)
-    +put(path, body)
-    +delete(path)
-  }
-  class accessTokenStore {
-    +setAccessToken(token)
-    +getAccessToken()
-    +clearAccessToken()
-  }
+class SettingsApiMapper
+
+class "settings-api/schemas.ts" as ZodSchemas <<Zod schemas>> {
+  +getProfileApiSchema
+  +getSessionsApiSchema
+  +getNotificationPreferencesApiSchema
+  +getMfaStatusApiSchema
 }
 
-ProfilePage --> useGetProfileQuery
-ProfilePage --> useUpdateProfileMutation
-SecurityPage --> useChangePasswordMutation
-SecurityPage --> useGetMfaStatusQuery
-SessionsPage --> useGetSessionsQuery
-SessionsPage --> useRevokeSessionMutation
-NotificationsPage --> useGetNotificationPreferencesQuery
-NotificationsPage --> useUpdateNotificationPreferencesMutation
-MfaPage --> useGetMfaStatusQuery
+class apiClient {
+  +get(path)
+  +post(path, body)
+  +put(path, body)
+  +delete(path)
+}
 
-useGetProfileQuery --> GetProfileUseCase
-useUpdateProfileMutation --> UpdateProfileUseCase
-useChangePasswordMutation --> ChangePasswordUseCase
-useGetSessionsQuery --> GetSessionsUseCase
-useRevokeSessionMutation --> RevokeSessionUseCase
-useGetNotificationPreferencesQuery --> GetNotificationPreferencesUseCase
-useUpdateNotificationPreferencesMutation --> UpdateNotificationPreferencesUseCase
-useGetMfaStatusQuery --> GetMfaStatusUseCase
+class accessTokenStore {
+  +getAccessToken()
+  +setAccessToken(token)
+  +clearAccessToken()
+}
 
-GetProfileUseCase --> ISettingsRepository
-UpdateProfileUseCase --> ISettingsRepository
-ChangePasswordUseCase --> ISettingsRepository
-GetSessionsUseCase --> ISettingsRepository
-RevokeSessionUseCase --> ISettingsRepository
-GetNotificationPreferencesUseCase --> ISettingsRepository
-UpdateNotificationPreferencesUseCase --> ISettingsRepository
-GetMfaStatusUseCase --> ISettingsRepository
+class "Settings Domain Models" as DomainModels <<domain>> {
+  +UserProfile
+  +Session
+  +NotificationPreferences
+  +MfaStatus
+}
 
+SettingsPages --> SettingsHooks : calls
+SettingsHooks --> SettingsUseCases : executes
+SettingsUseCases --> ISettingsRepository : port
 SettingsApiRepository ..|> ISettingsRepository
-SettingsApiRepository --> apiClient : REST /settings/*
-SettingsApiRepository --> SettingsApiMapper : map API to domain
-SettingsApiRepository --> ZodSchemas : validate responses
-apiClient --> accessTokenStore : Authorization header
+SettingsApiRepository --> apiClient : REST
+SettingsApiRepository --> SettingsApiMapper : maps
+SettingsApiRepository --> ZodSchemas : validates
+SettingsApiMapper --> DomainModels : creates
+apiClient --> accessTokenStore : token
 
-SettingsApiMapper --> UserProfile
-SettingsApiMapper --> Session
-SettingsApiMapper --> NotificationPreferences
-SettingsApiMapper --> MfaStatus
+note bottom
+Frontend scope only: auth-fe settings code calls auth-be through
+SettingsApiRepository and apiClient.
+end note
 @enduml
-

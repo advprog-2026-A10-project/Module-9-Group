@@ -1,115 +1,105 @@
 @startuml
 title Code Diagram - Auth Backend Settings
-top to bottom direction
+left to right direction
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
-skinparam nodesep 25
-skinparam ranksep 45
+skinparam nodesep 50
+skinparam ranksep 70
+skinparam wrapWidth 200
 hide empty members
 
-package "HTTP Layer" as HTTP {
-  class controllers {
-    +get_profile()
-    +update_profile()
-    +change_password()
-    +get_sessions()
-    +revoke_session()
-    +revoke_all_sessions()
-    +get_notification_preferences()
-    +update_notification_preferences()
-    +get_mfa_settings()
-  }
-  class AuthenticatedUser
-  enum ApiError
+class "Settings/Auth Controllers" as Controllers <<controller module>> {
+  +get_profile()
+  +update_profile()
+  +change_password()
+  +get_sessions()
+  +revoke_session()
+  +revoke_all_sessions()
+  +get_notification_preferences()
+  +update_notification_preferences()
+  +get_mfa_settings()
 }
 
-package "Application DTOs and Use Case" as APP {
-  class AuthMfaUseCase {
-    +get_profile(auth)
-    +update_profile(auth, command)
-    +change_password(auth, command)
-    +get_sessions(auth)
-    +revoke_session(auth, session_id)
-    +revoke_all_sessions(auth)
-    +get_notification_preferences(auth)
-    +update_notification_preferences(auth, command)
-    +get_mfa_settings(auth)
-  }
-  class "UpdateProfileCommand" as UpdateProfileCommand
-  class "ChangePasswordCommand" as ChangePasswordCommand
-  class "UpdateNotification\nPreferencesCommand" as UpdateNotificationPreferencesCommand
-  class MfaSettingsDto
-  class SessionDto
-  class NotificationPreferencesDto
-  class AuthenticatedUserContext
+class AuthenticatedUser <<extractor>>
+enum ApiError
+
+class AuthMfaUseCase <<application service>> {
+  +get_profile(auth)
+  +update_profile(auth, command)
+  +change_password(auth, command)
+  +get_sessions(auth)
+  +revoke_session(auth, session_id)
+  +revoke_all_sessions(auth)
+  +get_notification_preferences(auth)
+  +update_notification_preferences(auth, command)
+  +get_mfa_settings(auth)
 }
 
-package "Domain Entities" as DOMAIN {
-  class User
-  class AuthSession
-  class "Notification\nPreferences" as NotificationPreferences
-  class EmailMfaCode
-  class TotpSetup
-  enum AuthError
+class "Command DTOs" as CommandDtos <<DTO>> {
+  +UpdateProfileCommand
+  +ChangePasswordCommand
+  +UpdateNotificationPreferencesCommand
 }
 
-package "Repository Traits" as PORTS {
-  interface UserRepository
-  interface SessionRepository
-  interface "NotificationPreferences\nRepository" as NotificationPreferencesRepository
-  interface "EmailMfaCode\nRepository" as EmailMfaCodeRepository
-  interface "TotpSetup\nRepository" as TotpSetupRepository
+class "Response DTOs" as ResponseDtos <<DTO>> {
+  +MfaSettingsDto
+  +SessionDto
+  +NotificationPreferencesDto
+  +AuthenticatedUserContext
 }
 
-package "Infrastructure Repositories" as REPOS {
-  class PostgresUserRepository
-  class PostgresSessionRepository
-  class "PostgresNotification\nPreferencesRepository" as PostgresNotificationPreferencesRepository
-  class "PostgresEmailMfa\nCodeRepository" as PostgresEmailMfaCodeRepository
-  class "PostgresTotpSetup\nRepository" as PostgresTotpSetupRepository
+class "Domain Entities" as DomainEntities <<domain>> {
+  +User
+  +AuthSession
+  +NotificationPreferences
+  +EmailMfaCode
+  +TotpSetup
+  +AuthError
 }
 
-package "Services" as SERVICES {
-  class ScryptPasswordHasher
-  class TotpRsService
-  class "ResendVerification\nEmailSender" as ResendVerificationEmailSender
-  class SystemClock
+interface "Repository Traits" as RepositoryTraits {
+  +UserRepository
+  +SessionRepository
+  +NotificationPreferencesRepository
+  +EmailMfaCodeRepository
+  +TotpSetupRepository
+}
+
+class "PostgreSQL Repositories" as PostgresRepositories <<infrastructure>> {
+  +PostgresUserRepository
+  +PostgresSessionRepository
+  +PostgresNotificationPreferencesRepository
+  +PostgresEmailMfaCodeRepository
+  +PostgresTotpSetupRepository
+}
+
+class "Security and Support Services" as SecurityServices <<service>> {
+  +ScryptPasswordHasher
+  +TotpRsService
+  +ResendVerificationEmailSender
+  +SystemClock
 }
 
 class "Auth PostgreSQL" as AuthDB <<Database>>
 class "Resend Email Provider" as Resend <<External System>>
 
-HTTP -[hidden]down- APP
-APP -[hidden]down- DOMAIN
-DOMAIN -[hidden]down- PORTS
-PORTS -[hidden]down- REPOS
-REPOS -[hidden]down- SERVICES
+Controllers --> AuthenticatedUser : extracts
+Controllers --> AuthMfaUseCase : calls
+Controllers --> ApiError : maps
+AuthenticatedUser --> ResponseDtos : context
 
-controllers --> AuthenticatedUser : extract JWT/session
-controllers --> AuthMfaUseCase : call settings methods
-controllers --> ApiError : map errors
-AuthenticatedUser --> AuthenticatedUserContext
+AuthMfaUseCase --> CommandDtos : commands
+AuthMfaUseCase --> ResponseDtos : DTOs
+AuthMfaUseCase --> DomainEntities : entities
+AuthMfaUseCase --> RepositoryTraits : ports
+AuthMfaUseCase --> SecurityServices : services
 
-AuthMfaUseCase --> PORTS : uses repository traits
-AuthMfaUseCase --> SERVICES : uses services
-AuthMfaUseCase --> DOMAIN : reads/updates entities
-AuthMfaUseCase --> UpdateProfileCommand
-AuthMfaUseCase --> ChangePasswordCommand
-AuthMfaUseCase --> UpdateNotificationPreferencesCommand
-AuthMfaUseCase --> MfaSettingsDto
-AuthMfaUseCase --> SessionDto
-AuthMfaUseCase --> NotificationPreferencesDto
+PostgresRepositories ..|> RepositoryTraits
+PostgresRepositories --> AuthDB : SQLx
+SecurityServices --> Resend : email
 
-PostgresUserRepository ..|> UserRepository
-PostgresSessionRepository ..|> SessionRepository
-PostgresNotificationPreferencesRepository ..|> NotificationPreferencesRepository
-PostgresEmailMfaCodeRepository ..|> EmailMfaCodeRepository
-PostgresTotpSetupRepository ..|> TotpSetupRepository
-
-PostgresUserRepository --> AuthDB : users/profiles/MFA flags
-PostgresSessionRepository --> AuthDB : sessions
-PostgresNotificationPreferencesRepository --> AuthDB : preferences
-PostgresEmailMfaCodeRepository --> AuthDB : email MFA codes
-PostgresTotpSetupRepository --> AuthDB : TOTP setup tickets
-ResendVerificationEmailSender --> Resend : MFA email
+note bottom
+Backend scope only. Auth repositories persist to Auth PostgreSQL.
+Cross-service database access is intentionally excluded.
+end note
 @enduml

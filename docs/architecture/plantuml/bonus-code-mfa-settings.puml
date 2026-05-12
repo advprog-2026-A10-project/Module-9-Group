@@ -1,10 +1,11 @@
 @startuml
 title Bonus Code Diagram - MFA Settings
-top to bottom direction
+left to right direction
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
-skinparam nodesep 25
-skinparam ranksep 45
+skinparam nodesep 50
+skinparam ranksep 70
+skinparam wrapWidth 190
 hide empty members
 
 class AuthMfaUseCase {
@@ -17,74 +18,59 @@ class AuthMfaUseCase {
   -require_current_password(auth, current_password)
 }
 
-package "MFA Commands and DTOs" as DTO {
-  class SetupTotpCommand
-  class VerifyTotpSetupCommand
-  class SetupEmailMfaCommand
-  class "VerifyEmailMfa\nSetupCommand" as VerifyEmailMfaSetupCommand
-  class DisableMfaCommand
-  class MfaSettingsDto
+class "MFA Commands and DTOs" as MfaDtos <<DTO>> {
+  +SetupTotpCommand
+  +VerifyTotpSetupCommand
+  +SetupEmailMfaCommand
+  +VerifyEmailMfaSetupCommand
+  +DisableMfaCommand
+  +MfaSettingsDto
 }
 
-package "MFA Domain" as DOMAIN {
-  class User
-  class TotpSetup
-  class EmailMfaCode
-  enum EmailMfaCodePurpose {
-    Login
-    Setup
-  }
+class "MFA Domain" as MfaDomain <<domain>> {
+  +User
+  +TotpSetup
+  +EmailMfaCode
+  +EmailMfaCodePurpose.Login
+  +EmailMfaCodePurpose.Setup
 }
 
-package "MFA Ports" as PORTS {
-  interface UserRepository
-  interface "TotpSetup\nRepository" as TotpSetupRepository
-  interface "EmailMfaCode\nRepository" as EmailMfaCodeRepository
-  interface TotpService
-  interface MfaEmailSender
-  interface PasswordVerifier
-  interface "VerificationToken\nGenerator" as VerificationTokenGenerator
-  interface "VerificationToken\nHasher" as VerificationTokenHasher
-  interface Clock
+interface "MFA Ports" as MfaPorts {
+  +UserRepository
+  +TotpSetupRepository
+  +EmailMfaCodeRepository
+  +TotpService
+  +MfaEmailSender
+  +PasswordVerifier
+  +VerificationTokenGenerator
+  +VerificationTokenHasher
+  +Clock
 }
 
-package "MFA Infrastructure" as INFRA {
-  class PostgresUserRepository
-  class "PostgresTotpSetup\nRepository" as PostgresTotpSetupRepository
-  class "PostgresEmailMfa\nCodeRepository" as PostgresEmailMfaCodeRepository
-  class TotpRsService
-  class "ResendVerification\nEmailSender" as ResendVerificationEmailSender
-  class ScryptPasswordHasher
-  class "RandomVerification\nTokenGenerator" as RandomVerificationTokenGenerator
-  class "Sha256Verification\nTokenHasher" as Sha256VerificationTokenHasher
-  class SystemClock
+class "MFA Infrastructure" as MfaInfrastructure <<infrastructure>> {
+  +PostgresUserRepository
+  +PostgresTotpSetupRepository
+  +PostgresEmailMfaCodeRepository
+  +TotpRsService
+  +ResendVerificationEmailSender
+  +ScryptPasswordHasher
+  +RandomVerificationTokenGenerator
+  +Sha256VerificationTokenHasher
+  +SystemClock
 }
 
 class "Auth PostgreSQL" as AuthDB <<Database>>
 class "Resend Email Provider" as Resend <<External System>>
 
-DTO -[hidden]down- DOMAIN
-DOMAIN -[hidden]down- PORTS
-PORTS -[hidden]down- INFRA
+AuthMfaUseCase --> MfaDtos : DTOs
+AuthMfaUseCase --> MfaDomain : domain
+AuthMfaUseCase --> MfaPorts : ports
+MfaInfrastructure ..|> MfaPorts
+MfaInfrastructure --> AuthDB : SQLx
+MfaInfrastructure --> Resend : email
 
-AuthMfaUseCase --> DTO : accepts commands\nreturns MFA status
-AuthMfaUseCase --> DOMAIN : updates MFA state
-AuthMfaUseCase --> PORTS : depends on ports
-
-EmailMfaCode --> EmailMfaCodePurpose
-
-PostgresUserRepository ..|> UserRepository
-PostgresTotpSetupRepository ..|> TotpSetupRepository
-PostgresEmailMfaCodeRepository ..|> EmailMfaCodeRepository
-TotpRsService ..|> TotpService
-ResendVerificationEmailSender ..|> MfaEmailSender
-ScryptPasswordHasher ..|> PasswordVerifier
-RandomVerificationTokenGenerator ..|> VerificationTokenGenerator
-Sha256VerificationTokenHasher ..|> VerificationTokenHasher
-SystemClock ..|> Clock
-
-PostgresUserRepository --> AuthDB : MFA flags
-PostgresTotpSetupRepository --> AuthDB : TOTP setup tickets
-PostgresEmailMfaCodeRepository --> AuthDB : email MFA codes
-ResendVerificationEmailSender --> Resend : email MFA code
+note bottom
+Bonus MFA scope only. TOTP and email MFA persist through
+auth-be infrastructure into Auth PostgreSQL.
+end note
 @enduml
