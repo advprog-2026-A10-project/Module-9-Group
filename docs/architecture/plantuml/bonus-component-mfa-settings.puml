@@ -3,8 +3,8 @@ title Bonus Component Diagram - MFA Settings
 top to bottom direction
 skinparam componentStyle rectangle
 skinparam linetype polyline
-skinparam nodesep 70
-skinparam ranksep 75
+skinparam nodesep 120
+skinparam ranksep 150
 skinparam wrapWidth 210
 skinparam packageStyle rectangle
 
@@ -42,23 +42,23 @@ package "Auth Backend MFA Settings" as AuthBE <<Backend>> {
 database "Auth PostgreSQL\nauth-db" as AuthDB <<Database>>
 cloud "Resend Email Provider" as Resend <<External System>>
 
-MFAPages --> MfaHooks : calls
-MfaHooks --> SettingsRepo : API use
-SettingsRepo --> Controllers : REST
+MFAPages -right-> MfaHooks
+MfaHooks -down-> SettingsRepo
+SettingsRepo -down-> Controllers
 
-Controllers --> AuthExtractor : auth guard
-Controllers --> AuthMfa : delegates
+Controllers -down-> AuthExtractor
+Controllers -right-> AuthMfa
 
-AuthMfa --> TotpService : TOTP
-AuthMfa --> TotpSetupRepo : setup ticket
-AuthMfa --> EmailSender : email code
-AuthMfa --> EmailCodeRepo : email code
-AuthMfa --> UserRepo : MFA flags
+AuthMfa -left-> TotpService
+AuthMfa -down-> TotpSetupRepo
+AuthMfa -left-> EmailSender
+AuthMfa -down-> EmailCodeRepo
+AuthMfa -down-> UserRepo
 
-TotpSetupRepo --> AuthDB : SQLx
-EmailCodeRepo --> AuthDB : SQLx
-UserRepo --> AuthDB : SQLx
-EmailSender --> Resend : email API
+TotpSetupRepo -down-> AuthDB
+EmailCodeRepo -down-> AuthDB
+UserRepo -down-> AuthDB
+EmailSender -down-> Resend
 
 note bottom of AuthDB
 MFA data persists only to Auth PostgreSQL.

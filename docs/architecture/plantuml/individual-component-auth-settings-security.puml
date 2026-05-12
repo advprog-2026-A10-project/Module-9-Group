@@ -3,8 +3,8 @@ title Individual Component Diagram - Auth Settings Security
 left to right direction
 skinparam componentStyle rectangle
 skinparam linetype ortho
-skinparam nodesep 55
-skinparam ranksep 70
+skinparam nodesep 95
+skinparam ranksep 120
 skinparam wrapWidth 200
 skinparam packageStyle rectangle
 

@@ -3,8 +3,8 @@ title Code Diagram - Auth Backend Settings
 left to right direction
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
-skinparam nodesep 50
-skinparam ranksep 70
+skinparam nodesep 80
+skinparam ranksep 110
 skinparam wrapWidth 200
 hide empty members
 
@@ -83,20 +83,20 @@ class "Security and Support Services" as SecurityServices <<service>> {
 class "Auth PostgreSQL" as AuthDB <<Database>>
 class "Resend Email Provider" as Resend <<External System>>
 
-Controllers --> AuthenticatedUser : extracts
-Controllers --> AuthMfaUseCase : calls
-Controllers --> ApiError : maps
-AuthenticatedUser --> ResponseDtos : context
+Controllers --> AuthenticatedUser
+Controllers --> AuthMfaUseCase
+Controllers --> ApiError
+AuthenticatedUser --> ResponseDtos
 
-AuthMfaUseCase --> CommandDtos : commands
-AuthMfaUseCase --> ResponseDtos : DTOs
-AuthMfaUseCase --> DomainEntities : entities
-AuthMfaUseCase --> RepositoryTraits : ports
-AuthMfaUseCase --> SecurityServices : services
+AuthMfaUseCase --> CommandDtos
+AuthMfaUseCase --> ResponseDtos
+AuthMfaUseCase --> DomainEntities
+AuthMfaUseCase --> RepositoryTraits
+AuthMfaUseCase --> SecurityServices
 
 PostgresRepositories ..|> RepositoryTraits
-PostgresRepositories --> AuthDB : SQLx
-SecurityServices --> Resend : email
+PostgresRepositories --> AuthDB
+SecurityServices --> Resend
 
 note bottom
 Backend scope only. Auth repositories persist to Auth PostgreSQL.

@@ -3,8 +3,8 @@ title Code Diagram - Auth Frontend Settings
 left to right direction
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
-skinparam nodesep 45
-skinparam ranksep 65
+skinparam nodesep 110
+skinparam ranksep 140
 skinparam wrapWidth 190
 hide empty members
 
@@ -80,15 +80,15 @@ class "Settings Domain Models" as DomainModels <<domain>> {
   +MfaStatus
 }
 
-SettingsPages --> SettingsHooks : calls
-SettingsHooks --> SettingsUseCases : executes
-SettingsUseCases --> ISettingsRepository : port
+SettingsPages -right-> SettingsHooks
+SettingsHooks -right-> SettingsUseCases
+SettingsUseCases -right-> ISettingsRepository
 SettingsApiRepository ..|> ISettingsRepository
-SettingsApiRepository --> apiClient : REST
-SettingsApiRepository --> SettingsApiMapper : maps
-SettingsApiRepository --> ZodSchemas : validates
-SettingsApiMapper --> DomainModels : creates
-apiClient --> accessTokenStore : token
+SettingsApiRepository -down-> apiClient
+SettingsApiRepository -right-> SettingsApiMapper
+SettingsApiRepository -down-> ZodSchemas
+SettingsApiMapper -right-> DomainModels
+apiClient -right-> accessTokenStore
 
 note bottom
 Frontend scope only: auth-fe settings code calls auth-be through
